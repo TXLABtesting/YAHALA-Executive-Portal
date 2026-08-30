@@ -87,12 +87,17 @@ export function diagnose(err) {
       hint: 'TLS was refused. Make sure DATABASE_URL ends with ?sslmode=require.',
     };
   }
-  // Nothing recognised: report the driver's error code, which names the fault
-  // without revealing the host, user or any data.
+  // Nothing recognised. Report the driver's own words so the fault can be
+  // identified at all — with anything password-shaped removed, and only ever
+  // for a deployment that is already failing to reach its database.
   return {
     database: 'error',
     code: code || err.name || 'unknown',
-    hint: 'The database could not be queried. Send this code on for diagnosis.',
+    detail: message
+      .replace(/password[^\s,;]*/gi, 'password=***')
+      .replace(/\s+/g, ' ')
+      .slice(0, 200),
+    hint: 'The database could not be queried. Send this detail on for diagnosis.',
   };
 }
 
