@@ -150,11 +150,31 @@ row behind; there is no automatic cleanup, which is fine at this volume.
 
 ## Deploying
 
-`render.yaml` is a ready blueprint: connect the repository at
-dashboard.render.com/blueprints and Render builds the Dockerfile, provisions
-PostgreSQL and injects `DATABASE_URL`. Set `ADMIN_PASSWORD` in the dashboard
-before the first deploy. The same image runs unchanged on Railway, Fly.io or
-any Docker host.
+`render.yaml` is a ready blueprint on Render's free tier: connect the
+repository at dashboard.render.com/blueprints, set `ADMIN_PASSWORD` when
+prompted, and Render builds the Dockerfile, provisions PostgreSQL and injects
+`DATABASE_URL`. The same image runs unchanged on Railway, Fly.io or any Docker
+host.
+
+Two limits of Render's free tier are worth knowing before you start:
+
+- A free database is deleted after 30 days.
+- A free web service sleeps after 15 minutes without traffic and takes about a
+  minute to wake up.
+
+### Using a database that stays free
+
+To avoid the 30-day expiry, host the database somewhere with a permanent free
+tier (Neon and Supabase both have one) and let Render run only the app:
+
+1. Create a project there and copy its connection string. It ends in
+   `?sslmode=require`.
+2. Delete the whole `databases:` block from `render.yaml`, and replace the
+   `DATABASE_URL` entry's `fromDatabase:` lines with `sync: false`.
+3. Paste the connection string as `DATABASE_URL` in the Render dashboard.
+
+Nothing else changes: the container migrates and seeds that database on its
+first boot exactly as it would Render's own.
 
 Managed PostgreSQL requires TLS; the pool enables it automatically when
 `DATABASE_URL` carries `sslmode=require` (or when `PGSSL=true` is set).

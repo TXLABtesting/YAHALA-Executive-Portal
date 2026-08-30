@@ -1,12 +1,21 @@
-# Render blueprint: managed PostgreSQL plus the portal container.
-# Connect the repository at https://dashboard.render.com/blueprints and Render
-# builds the Dockerfile, provisions the database and wires DATABASE_URL in.
+# Render blueprint: managed PostgreSQL plus the portal container, both on
+# Render's free tier. Connect the repository at
+# https://dashboard.render.com/blueprints and Render builds the Dockerfile,
+# provisions the database and wires DATABASE_URL in.
+#
+# Two limits of the free tier, neither of which needs a code change:
+#   - A free database is removed after 30 days. To keep the portal running past
+#     that, either upgrade the database in the Render dashboard, or point
+#     DATABASE_URL at a permanently free host (Neon, Supabase) — see the
+#     "Deploying" section of README.md.
+#   - A free web service sleeps after 15 minutes with no traffic and takes
+#     roughly a minute to answer the next request.
 
 databases:
   - name: yahala-db
     databaseName: yahala
     user: yahala
-    plan: basic-256mb
+    plan: free
 
 services:
   - type: web
