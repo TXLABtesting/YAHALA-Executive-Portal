@@ -122,15 +122,23 @@ const REDEEMERS = [
 const ACCOMMODATION = { total: 214, from: '2026-01-01', to: '2026-07-07' };
 
 async function insertMerchants(client, rows, archived) {
+  // Logos are content-addressed and there are only a handful of distinct ones,
+  // so resolving them first collapses thousands of lookups into a few writes.
+  const logos = [];
+  for (const m of rows) logos.push(await logoUrl(m.logo, client));
+
+  const COLUMNS = 13;
+  const BATCH = 200;
   const ids = new Map();
-  for (const m of rows) {
-    const { rows: inserted } = await client.query(
-      `INSERT INTO merchants
-         (name, category, sub, offer_type, offer_desc, offers, offer_source,
-          status, city, logo, reason, expiry_label, archived)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-       RETURNING id, name`,
-      [
+
+  // One statement per batch rather than per row: against a remote database
+  // that is the difference between a few seconds and a few minutes.
+  for (let start = 0; start < rows.length; start += BATCH) {
+    const batch = rows.slice(start, start + BATCH);
+    const values = [];
+    const placeholders = batch.map((m, i) => {
+      const base = i * COLUMNS;
+      values.push(
         m.name || '',
         m.category || 'Fashion & Retail',
         m.sub || '',
@@ -140,14 +148,25 @@ async function insertMerchants(client, rows, archived) {
         m.offerSource === 'Entertainer' ? 'Entertainer' : 'YAHALA Exclusive',
         archived ? 'Inactive' : m.status || 'Live',
         m.city || '',
-        await logoUrl(m.logo, client),
+        logos[start + i],
         m.reason || '',
         m.expiryLabel || '',
         archived,
-      ],
+      );
+      return `(${Array.from({ length: COLUMNS }, (_, c) => `$${base + c + 1}`).join(',')})`;
+    });
+
+    const { rows: inserted } = await client.query(
+      `INSERT INTO merchants
+         (name, category, sub, offer_type, offer_desc, offers, offer_source,
+          status, city, logo, reason, expiry_label, archived)
+       VALUES ${placeholders.join(',')}
+       RETURNING id, name`,
+      values,
     );
-    if (!archived) ids.set(inserted[0].name.toLowerCase(), inserted[0].id);
+    if (!archived) for (const row of inserted) ids.set(row.name.toLowerCase(), row.id);
   }
+
   return ids;
 }
 
