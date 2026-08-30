@@ -10,6 +10,7 @@
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "db:check": "node scripts/check-db.js",
+    "export:sql": "node scripts/export-sql.js",
     "reset": "node scripts/migrate.js --drop && node scripts/seed.js"
   },
   "dependencies": {

@@ -7,6 +7,7 @@ directory, dashboard and admin back office backed by PostgreSQL.
 server/    Node.js + Express REST API, PostgreSQL access, seed scripts
 web/       React + Vite frontend
 api/       Serverless entry point, used only when deploying to Vercel
+db/        import.sql — the whole database as one paste-and-run script
 canvas/    Source files for the design canvas (see canvas/README.md)
 assets/    Original brand assets and the generated merchant seed (data.js)
 data/      Merchant exports the seed was built from
@@ -81,15 +82,21 @@ The portal has two ways in, matching the original design:
   Portal is hidden and every write is rejected by the API.
 - **Administrator Access** — username and password. Full read/write.
 
-The seeded credentials come from `ADMIN_USERNAME` / `ADMIN_PASSWORD` in
-`server/.env` (`admin` / `admin123` by default — **change this before
-deploying**). To change it later:
+The administrator account is established the first time someone signs in: if
+the `credentials` table is empty, a sign-in matching `ADMIN_USERNAME` /
+`ADMIN_PASSWORD` creates the account and stores the password as a bcrypt hash.
+From then on the stored hash is what counts and the environment variable is
+ignored, so the password never has to live in a file or a database dump.
+
+Two ways to change it later:
 
 ```bash
 cd server && node scripts/set-password.js "a new password"
 ```
 
-Passwords are stored as bcrypt hashes. The session is a signed JWT in an
+or, with no shell access: change `ADMIN_PASSWORD` on your hosting platform, run
+`DELETE FROM credentials;` against the database, and sign in with the new
+password. The session is a signed JWT in an
 httpOnly, SameSite=Lax cookie that expires after 12 hours.
 
 ## Data model
@@ -156,6 +163,20 @@ row behind; there is no automatic cleanup, which is fine at this volume.
 The portal is one container plus a PostgreSQL database. `render.yaml` deploys
 it on Render's free tier against a Supabase database; the same image runs
 unchanged on Railway, Fly.io or any Docker host.
+
+### Setting up without a local install
+
+Everything below can be done from a browser. `db/import.sql` in this repository
+is the whole database — schema and content — as one script: open the Supabase
+SQL Editor, paste it, and run it. It creates no administrator account, because
+the first sign-in creates one from the `ADMIN_PASSWORD` you set on your hosting
+platform.
+
+Regenerate that file after changing the schema or the seed data with:
+
+```bash
+cd server && npm run export:sql
+```
 
 ### 1. Create the database on Supabase
 

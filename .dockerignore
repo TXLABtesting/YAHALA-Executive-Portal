@@ -5,6 +5,7 @@ server/uploads
 screenshots
 uploads
 canvas
+db
 api
 vercel.json
 .git

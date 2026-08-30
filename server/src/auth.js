@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { config } from './config.js';
@@ -55,12 +56,30 @@ export function requireAdmin(req, res, next) {
   next();
 }
 
+const equals = (a, b) => {
+  const x = Buffer.from(String(a));
+  const y = Buffer.from(String(b));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+};
+
 export async function verifyAdminPassword(username, password) {
+  const user = String(username || '').trim().toLowerCase();
   const { rows } = await query(
     'SELECT password_hash FROM credentials WHERE username = $1 AND role = $2',
-    [String(username || '').trim().toLowerCase(), 'admin'],
+    [user, 'admin'],
   );
-  if (!rows.length) return false;
+
+  // No administrator provisioned yet: the first correct sign-in establishes one
+  // from ADMIN_USERNAME/ADMIN_PASSWORD and stores its hash, so a deployment
+  // never needs shell access to set the password. Clearing the credentials
+  // table is therefore how an administrator password is reset.
+  if (!rows.length) {
+    if (!equals(user, config.adminUsername.trim().toLowerCase())) return false;
+    if (!equals(password || '', config.adminPassword)) return false;
+    await setAdminPassword(config.adminUsername, config.adminPassword);
+    return true;
+  }
+
   return bcrypt.compare(String(password || ''), rows[0].password_hash);
 }
 
