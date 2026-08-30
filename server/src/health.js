@@ -5,7 +5,7 @@ import { query } from './db/index.js';
  * Classifies a database failure into something an operator can act on, without
  * echoing the driver's message (which carries the host and user name).
  */
-function diagnose(err) {
+export function diagnose(err) {
   const code = err.code || '';
   const message = String(err.message || '');
 
@@ -50,13 +50,50 @@ function diagnose(err) {
         'Supabase SQL Editor (or `npm run migrate && npm run seed`).',
     };
   }
+  // Supabase's pooler (Supavisor) rejects an unknown tenant when the user name
+  // is not in the postgres.<project-ref> form its URI uses.
+  if (/tenant or user not found/i.test(message)) {
+    return {
+      database: 'authentication_failed',
+      hint:
+        'The connection pooler did not recognise the user. Copy the URI from ' +
+        "Supabase's Connect dialog exactly — on the pooler the user name has the " +
+        'form postgres.<project-ref>, not plain postgres.',
+    };
+  }
+  if (/max client connections reached|too many clients/i.test(message)) {
+    return {
+      database: 'connection_limit',
+      hint: 'The database refused more connections. Wait a moment and retry.',
+    };
+  }
+  if (/timeout|ETIMEDOUT/i.test(message) || code === 'ETIMEDOUT') {
+    return {
+      database: 'unreachable',
+      hint:
+        'The connection timed out. Check the host and port, and prefer the ' +
+        'connection pooler URI over the direct db.… host.',
+    };
+  }
+  if (code === 'ECONNRESET' || code === 'EPIPE') {
+    return {
+      database: 'unreachable',
+      hint: 'The connection was closed by the server. Check the host and port in DATABASE_URL.',
+    };
+  }
   if (/self.signed|certificate|SSL|TLS/i.test(message)) {
     return {
       database: 'tls_rejected',
       hint: 'TLS was refused. Make sure DATABASE_URL ends with ?sslmode=require.',
     };
   }
-  return { database: 'error', hint: 'The database could not be queried. See the server logs.' };
+  // Nothing recognised: report the driver's error code, which names the fault
+  // without revealing the host, user or any data.
+  return {
+    database: 'error',
+    code: code || err.name || 'unknown',
+    hint: 'The database could not be queried. Send this code on for diagnosis.',
+  };
 }
 
 /**
