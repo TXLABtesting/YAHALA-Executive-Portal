@@ -30,9 +30,6 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
     ports:
       - '${PORT:-8080}:4000'
-    volumes:
-      - uploads:/app/server/uploads
 
 volumes:
   db-data:
-  uploads:

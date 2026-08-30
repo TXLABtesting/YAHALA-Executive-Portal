@@ -19,9 +19,6 @@ COPY server/ ./server/
 COPY assets/ ./assets/
 COPY --from=web-build /build/dist ./web/dist
 
-RUN mkdir -p /app/server/uploads
-VOLUME ["/app/server/uploads"]
-
 EXPOSE 4000
 WORKDIR /app/server
 

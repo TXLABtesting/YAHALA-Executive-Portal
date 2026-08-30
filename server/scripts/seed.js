@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { setAdminPassword } from '../src/auth.js';
 import { config } from '../src/config.js';
 import { applySchema, pool, query, withTransaction } from '../src/db/index.js';
-import { ensureUploadDir } from '../src/uploads.js';
+import { storeBuffer, mimeForExtension } from '../src/files.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
@@ -34,17 +34,23 @@ function loadSeedData() {
   };
 }
 
-/** Copies a bundled asset into the upload directory and returns its URL. */
-function importAsset(relativePath) {
+/** Stores a bundled asset in the files table and returns its URL. */
+const assetUrls = new Map();
+
+async function importAsset(relativePath, client) {
+  if (assetUrls.has(relativePath)) return assetUrls.get(relativePath);
+
   const source = path.join(assetsDir, relativePath);
-  if (!fs.existsSync(source)) return null;
-  ensureUploadDir();
-  const name = path.basename(relativePath);
-  fs.copyFileSync(source, path.join(config.uploadDir, name));
-  return `/uploads/${name}`;
+  const mime = mimeForExtension(path.extname(relativePath));
+  if (!fs.existsSync(source) || !mime) return null;
+
+  const url = await storeBuffer(fs.readFileSync(source), mime, client);
+  assetUrls.set(relativePath, url);
+  return url;
 }
 
-const logoUrl = (logo) => (logo ? importAsset(path.relative('assets', logo) || logo) : null);
+const logoUrl = (logo, client) =>
+  logo ? importAsset(path.relative('assets', logo) || logo, client) : null;
 
 const DEFAULT_KPIS = {
   offers: 612,
@@ -134,7 +140,7 @@ async function insertMerchants(client, rows, archived) {
         m.offerSource === 'Entertainer' ? 'Entertainer' : 'YAHALA Exclusive',
         archived ? 'Inactive' : m.status || 'Live',
         m.city || '',
-        logoUrl(m.logo),
+        await logoUrl(m.logo, client),
         m.reason || '',
         m.expiryLabel || '',
         archived,
@@ -163,7 +169,7 @@ async function main() {
     await client.query('DELETE FROM spotlight_pool');
     await client.query('UPDATE spotlight SET pinned_id = NULL WHERE id = 1');
     await client.query(
-      'TRUNCATE merchants, newsletters, launches, updates, redeemers RESTART IDENTITY CASCADE',
+      'TRUNCATE merchants, newsletters, launches, updates, redeemers, files RESTART IDENTITY CASCADE',
     );
 
     const liveIds = await insertMerchants(client, active, false);
@@ -183,7 +189,7 @@ async function main() {
       await client.query(
         `INSERT INTO newsletters (title, issue_date, description, thumb)
          VALUES ($1,$2,$3,$4)`,
-        [n.title, n.date, n.desc, importAsset(n.thumb)],
+        [n.title, n.date, n.desc, await importAsset(n.thumb, client)],
       );
     }
 

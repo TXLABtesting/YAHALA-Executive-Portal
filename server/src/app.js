@@ -5,8 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 import { attachSession, requireAuth } from './auth.js';
-import { ensureUploadDir } from './uploads.js';
 import { authRouter } from './routes/auth.js';
+import { filesRouter } from './routes/files.js';
 import { bootstrapRouter } from './routes/bootstrap.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import { launchesRouter } from './routes/launches.js';
@@ -18,7 +18,6 @@ import { uploadsRouter } from './routes/uploads.js';
 
 export function createApp() {
   const app = express();
-  ensureUploadDir();
 
   app.set('trust proxy', 1);
   // Logos and newsletter covers are data: URIs on the wire before they are
@@ -47,7 +46,9 @@ export function createApp() {
   app.use('/api/uploads', requireAuth, uploadsRouter);
   app.use('/api', requireAuth, dashboardRouter);
 
-  app.use('/uploads', express.static(config.uploadDir, { maxAge: '30d' }));
+  // Uploaded files are rows in the database, served behind the same session
+  // check as the rest of the portal.
+  app.use('/uploads', requireAuth, filesRouter);
 
   // In production the API also serves the built frontend.
   if (fs.existsSync(config.webDistDir)) {

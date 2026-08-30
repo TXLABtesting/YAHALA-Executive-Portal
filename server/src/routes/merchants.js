@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query, withTransaction } from '../db/index.js';
 import { requireAdmin } from '../auth.js';
-import { normalizeFileField } from '../uploads.js';
+import { normalizeFileField } from '../files.js';
 import {
   CATEGORIES,
   SOURCES,
@@ -18,7 +18,7 @@ const SELECT = 'SELECT * FROM merchants';
 const ORDER = 'ORDER BY created_at DESC, id DESC';
 
 /** A merchant marked Inactive belongs in the archive, wherever it came from. */
-const bodyToRow = (body) => {
+const bodyToRow = async (body) => {
   const status = oneOf(textIn(body.status, 'Live'), STATUSES);
   return {
     name: textIn(body.name).trim(),
@@ -30,7 +30,7 @@ const bodyToRow = (body) => {
     offerSource: oneOf(textIn(body.offerSource), SOURCES),
     status,
     city: textIn(body.city),
-    logo: normalizeFileField(body.logo),
+    logo: await normalizeFileField(body.logo),
     reason: textIn(body.reason),
     expiryLabel: textIn(body.expiryLabel),
     archived: status === 'Inactive',
@@ -55,7 +55,7 @@ merchantsRouter.get('/', async (req, res, next) => {
 
 merchantsRouter.post('/', requireAdmin, async (req, res, next) => {
   try {
-    const m = bodyToRow(req.body || {});
+    const m = await bodyToRow(req.body || {});
     if (!m.name) return res.status(400).json({ error: 'Merchant name is required.' });
 
     const row = await withTransaction(async (client) => {
@@ -81,7 +81,7 @@ merchantsRouter.post('/', requireAdmin, async (req, res, next) => {
 
 merchantsRouter.put('/:id', requireAdmin, async (req, res, next) => {
   try {
-    const m = bodyToRow(req.body || {});
+    const m = await bodyToRow(req.body || {});
     if (!m.name) return res.status(400).json({ error: 'Merchant name is required.' });
 
     const row = await withTransaction(async (client) => {

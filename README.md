@@ -104,6 +104,7 @@ httpOnly, SameSite=Lax cookie that expires after 12 hours.
 | `accommodation`  | Accommodation request total (single row)                    |
 | `settings`       | Small key/value settings, currently the dashboard layout    |
 | `credentials`    | Administrator username and bcrypt password hash             |
+| `files`          | Uploaded logos, covers and PDFs, keyed by content hash       |
 
 Marking a merchant **Inactive** moves it to the archive; giving an archived
 merchant any other status restores it to the live list. `kpi.merchants` is kept
@@ -136,11 +137,16 @@ a page load is a single round trip.
 
 ### Uploads
 
-Logos, newsletter covers and PDFs are posted as base64 `data:` URIs; the server
-writes them to `server/uploads/` under a content hash and stores the resulting
-`/uploads/<hash>.<ext>` URL on the row. Files are capped at 8 MB. Point a
-volume at `server/uploads/` (or swap `src/uploads.js` for object storage) when
-deploying.
+Logos, newsletter covers and PDFs are posted as base64 `data:` URIs and stored
+in the `files` table, keyed by the hash of their contents. The row keeps the
+resulting `/uploads/<hash>.<ext>` URL, which `GET /uploads/:name` serves back
+from the database behind the same session check as the rest of the portal.
+Files are capped at 8 MB.
+
+Keeping files in the database means the portal needs no persistent volume and a
+restart or redeploy never loses an upload. Because names are content hashes,
+uploading the same image twice stores it once. Replacing a logo leaves the old
+row behind; there is no automatic cleanup, which is fine at this volume.
 
 ## Deploying
 
@@ -149,10 +155,6 @@ dashboard.render.com/blueprints and Render builds the Dockerfile, provisions
 PostgreSQL and injects `DATABASE_URL`. Set `ADMIN_PASSWORD` in the dashboard
 before the first deploy. The same image runs unchanged on Railway, Fly.io or
 any Docker host.
-
-The uploads directory needs a persistent volume (the blueprint mounts one at
-`/app/server/uploads`). Without it the portal still works, but files uploaded
-through the admin screens are lost when the container restarts.
 
 Managed PostgreSQL requires TLS; the pool enables it automatically when
 `DATABASE_URL` carries `sslmode=require` (or when `PGSSL=true` is set).

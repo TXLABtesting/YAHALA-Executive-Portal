@@ -10,6 +10,19 @@ CREATE TABLE IF NOT EXISTS credentials (
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
 
+-- Uploaded logos, newsletter covers and PDFs live in the database rather than
+-- on disk, so the portal needs no persistent volume and a restart never loses
+-- a file. Rows are keyed by the hash of their content, which makes re-uploading
+-- the same image a no-op and lets the URL be cached forever.
+CREATE TABLE IF NOT EXISTS files (
+  hash       text PRIMARY KEY,
+  mime       text NOT NULL,
+  extension  text NOT NULL,
+  bytes      bytea NOT NULL,
+  size       integer NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS merchants (
   id           serial PRIMARY KEY,
   name         text NOT NULL,

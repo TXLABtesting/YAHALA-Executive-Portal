@@ -16,7 +16,6 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   rootDir: path.resolve(here, '..'),
-  uploadDir: path.resolve(here, '..', 'uploads'),
   // Built frontend, served by the API in production (npm run build in ../web).
   webDistDir: path.resolve(here, '..', '..', 'web', 'dist'),
   sessionMaxAgeMs: 12 * 60 * 60 * 1000,

@@ -1,17 +1,17 @@
 import { Router } from 'express';
 import { query } from '../db/index.js';
 import { requireAdmin } from '../auth.js';
-import { normalizeFileField } from '../uploads.js';
+import { normalizeFileField } from '../files.js';
 import { dateIn, newsletterOut, textIn } from '../mappers.js';
 
 export const newslettersRouter = Router();
 
-const bodyToRow = (b) => ({
+const bodyToRow = async (b) => ({
   title: textIn(b.title).trim(),
   date: dateIn(b.date),
   desc: textIn(b.desc),
-  thumb: normalizeFileField(b.thumb),
-  pdf: normalizeFileField(b.pdf),
+  thumb: await normalizeFileField(b.thumb),
+  pdf: await normalizeFileField(b.pdf),
   pdfName: textIn(b.pdfName),
 });
 
@@ -28,7 +28,7 @@ newslettersRouter.get('/', async (_req, res, next) => {
 
 newslettersRouter.post('/', requireAdmin, async (req, res, next) => {
   try {
-    const n = bodyToRow(req.body || {});
+    const n = await bodyToRow(req.body || {});
     if (!n.title) return res.status(400).json({ error: 'Title is required.' });
     const { rows } = await query(
       `INSERT INTO newsletters (title, issue_date, description, thumb, pdf, pdf_name)
@@ -43,7 +43,7 @@ newslettersRouter.post('/', requireAdmin, async (req, res, next) => {
 
 newslettersRouter.put('/:id', requireAdmin, async (req, res, next) => {
   try {
-    const n = bodyToRow(req.body || {});
+    const n = await bodyToRow(req.body || {});
     if (!n.title) return res.status(400).json({ error: 'Title is required.' });
     const { rows } = await query(
       `UPDATE newsletters
