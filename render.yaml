@@ -1,21 +1,22 @@
-# Render blueprint: managed PostgreSQL plus the portal container, both on
-# Render's free tier. Connect the repository at
-# https://dashboard.render.com/blueprints and Render builds the Dockerfile,
-# provisions the database and wires DATABASE_URL in.
+# Render blueprint for the portal, using an external PostgreSQL database
+# (Supabase). Connect the repository at https://dashboard.render.com/blueprints;
+# Render builds the Dockerfile and asks for the two values marked `sync: false`.
 #
-# Two limits of the free tier, neither of which needs a code change:
-#   - A free database is removed after 30 days. To keep the portal running past
-#     that, either upgrade the database in the Render dashboard, or point
-#     DATABASE_URL at a permanently free host (Neon, Supabase) — see the
-#     "Deploying" section of README.md.
-#   - A free web service sleeps after 15 minutes with no traffic and takes
-#     roughly a minute to answer the next request.
-
-databases:
-  - name: yahala-db
-    databaseName: yahala
-    user: yahala
-    plan: free
+# DATABASE_URL must be Supabase's *connection pooler* string — the one whose
+# host looks like aws-0-<region>.pooler.supabase.com. The direct db.<ref>
+# .supabase.co host resolves to IPv6 only, which Render cannot reach.
+#
+# To let Render host the database instead, add this block back and point
+# DATABASE_URL at it with `fromDatabase` instead of `sync: false`:
+#
+#   databases:
+#     - name: yahala-db
+#       databaseName: yahala
+#       user: yahala
+#       plan: free        # deleted after 30 days on the free tier
+#
+# A free web service sleeps after 15 minutes without traffic and takes about a
+# minute to wake up.
 
 services:
   - type: web
@@ -28,14 +29,13 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Paste the Supabase connection pooler URI, ending in ?sslmode=require.
       - key: DATABASE_URL
-        fromDatabase:
-          name: yahala-db
-          property: connectionString
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: ADMIN_USERNAME
         value: admin
-      # Set this in the Render dashboard before the first deploy.
+      # Set this before the first deploy — it becomes the sign-in password.
       - key: ADMIN_PASSWORD
         sync: false

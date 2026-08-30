@@ -150,31 +150,55 @@ row behind; there is no automatic cleanup, which is fine at this volume.
 
 ## Deploying
 
-`render.yaml` is a ready blueprint on Render's free tier: connect the
-repository at dashboard.render.com/blueprints, set `ADMIN_PASSWORD` when
-prompted, and Render builds the Dockerfile, provisions PostgreSQL and injects
-`DATABASE_URL`. The same image runs unchanged on Railway, Fly.io or any Docker
-host.
+The portal is one container plus a PostgreSQL database. `render.yaml` deploys
+it on Render's free tier against a Supabase database; the same image runs
+unchanged on Railway, Fly.io or any Docker host.
 
-Two limits of Render's free tier are worth knowing before you start:
+### 1. Create the database on Supabase
 
-- A free database is deleted after 30 days.
-- A free web service sleeps after 15 minutes without traffic and takes about a
-  minute to wake up.
+1. Create a project at supabase.com and choose a strong database password.
+2. Open **Connect** (top of the project dashboard) and copy the URI under
+   **Connection pooling** — its host looks like
+   `aws-0-<region>.pooler.supabase.com`. Do **not** use the direct
+   `db.<ref>.supabase.co` host: it resolves to IPv6 only, which most hosts,
+   Render included, cannot reach.
+3. Put your database password into the URI in place of `[YOUR-PASSWORD]` and
+   make sure it ends with `?sslmode=require`.
 
-### Using a database that stays free
+Check the string before deploying anything:
 
-To avoid the 30-day expiry, host the database somewhere with a permanent free
-tier (Neon and Supabase both have one) and let Render run only the app:
+```bash
+cd server
+DATABASE_URL="postgresql://…pooler.supabase.com:5432/postgres?sslmode=require" npm run db:check
+```
 
-1. Create a project there and copy its connection string. It ends in
-   `?sslmode=require`.
-2. Delete the whole `databases:` block from `render.yaml`, and replace the
-   `DATABASE_URL` entry's `fromDatabase:` lines with `sync: false`.
-3. Paste the connection string as `DATABASE_URL` in the Render dashboard.
+It prints the server version and what the database already holds, or an
+explanation of why the connection failed.
 
-Nothing else changes: the container migrates and seeds that database on its
-first boot exactly as it would Render's own.
+The app talks to Supabase over the PostgreSQL protocol as the database owner,
+not through Supabase's REST API, so row-level security policies and the
+anon/service API keys play no part — leave the API keys unused and unshared.
+
+### 2. Deploy on Render
+
+Connect the repository at dashboard.render.com/blueprints. Render reads
+`render.yaml` and asks for the two values it does not generate:
+
+- `DATABASE_URL` — the Supabase URI from step 1.
+- `ADMIN_PASSWORD` — the administrator sign-in password.
+
+On its first boot the container creates the schema and loads the merchant data,
+then serves the portal. Later deploys skip seeding because the database already
+holds merchants.
+
+A free Render service sleeps after 15 minutes without traffic and takes about a
+minute to wake up; a paid instance stays awake. Free Supabase projects pause
+after a week of no activity and are resumed from the dashboard.
+
+### 3. Point a domain at it
+
+Add the domain under the service's **Settings → Custom Domains** in Render and
+create the DNS record it shows. TLS is issued automatically.
 
 Managed PostgreSQL requires TLS; the pool enables it automatically when
 `DATABASE_URL` carries `sslmode=require` (or when `PGSSL=true` is set).
