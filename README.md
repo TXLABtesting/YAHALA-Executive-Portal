@@ -4,6 +4,7 @@ Executive portal for the YAHALA Royal Platinum Membership Network: a merchant
 directory, dashboard and admin back office backed by PostgreSQL.
 
 ```
+index.html The original single-file prototype, kept for reference
 server/    Node.js + Express REST API, PostgreSQL access, seed scripts
 web/       React + Vite frontend
 api/       Serverless entry point, used only when deploying to Vercel

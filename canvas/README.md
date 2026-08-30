@@ -2,7 +2,7 @@
 
 Working files for the YAHALA Executive Portal design canvas.
 
-`Main.dc.html` is `../YAHALA Executive Portal.dc.html` adapted to run as a
+`Main.dc.html` is `../index.html` adapted to run as a
 canvas artboard:
 
 - the merchant seed from `../assets/data.js` is inlined at the top of the
