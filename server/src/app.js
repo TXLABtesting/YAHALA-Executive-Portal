@@ -65,7 +65,11 @@ export function createApp({ serveStatic = !process.env.VERCEL } = {}) {
   app.use((err, _req, res, _next) => {
     const status = err.status || 500;
     if (status >= 500) console.error(err);
-    res.status(status).json({ error: err.message || 'Server error.' });
+    // A server-side failure is logged in full but reported plainly, so an
+    // internal message never reaches the sign-in screen. Errors marked
+    // `expose` are deliberate operator-facing ones.
+    const leaks = status >= 500 && !err.expose;
+    res.status(status).json({ error: leaks ? 'Server error. Please try again.' : err.message });
   });
 
   return app;

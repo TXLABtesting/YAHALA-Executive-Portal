@@ -4,9 +4,15 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
+// Falling back to a local database is a convenience for development only. In a
+// deployment it would surface as a puzzling ECONNREFUSED 127.0.0.1:5432, so
+// there the missing variable is reported as what it is.
+const isDeployed = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
+
 export const config = {
   databaseUrl:
-    process.env.DATABASE_URL || 'postgres://yahala:yahala_dev@127.0.0.1:5432/yahala',
+    process.env.DATABASE_URL ||
+    (isDeployed ? '' : 'postgres://yahala:yahala_dev@127.0.0.1:5432/yahala'),
   port: Number(process.env.PORT) || 4000,
   jwtSecret: process.env.JWT_SECRET || 'yahala-development-secret',
   adminUsername: process.env.ADMIN_USERNAME || 'admin',
