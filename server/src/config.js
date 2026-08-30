@@ -19,4 +19,11 @@ export const config = {
   // Built frontend, served by the API in production (npm run build in ../web).
   webDistDir: path.resolve(here, '..', '..', 'web', 'dist'),
   sessionMaxAgeMs: 12 * 60 * 60 * 1000,
+  // Vercel caps a serverless request body at 4.5 MB; everywhere else the
+  // limit is ours to choose.
+  maxUploadBytes:
+    Number(process.env.MAX_UPLOAD_MB || (process.env.VERCEL ? 3 : 8)) * 1024 * 1024,
+  get jsonBodyLimit() {
+    return `${Math.ceil((this.maxUploadBytes * 1.4) / (1024 * 1024))}mb`;
+  },
 };

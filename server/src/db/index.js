@@ -15,6 +15,9 @@ const needsSsl =
 
 export const pool = new pg.Pool({
   connectionString: config.databaseUrl,
+  // Each serverless instance keeps its own pool, so it may hold only one
+  // connection; a long-running server can use several.
+  max: Number(process.env.PGPOOL_MAX) || (process.env.VERCEL ? 1 : 10),
   ...(needsSsl ? { ssl: { rejectUnauthorized: Boolean(process.env.PGSSLROOTCERT) } } : null),
 });
 

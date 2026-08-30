@@ -6,6 +6,7 @@ directory, dashboard and admin back office backed by PostgreSQL.
 ```
 server/    Node.js + Express REST API, PostgreSQL access, seed scripts
 web/       React + Vite frontend
+api/       Serverless entry point, used only when deploying to Vercel
 canvas/    Source files for the design canvas (see canvas/README.md)
 assets/    Original brand assets and the generated merchant seed (data.js)
 data/      Merchant exports the seed was built from
@@ -32,6 +33,13 @@ To run it without Docker, follow the setup below.
 
 ## Setup
 
+Install once from the repository root — it is an npm workspace, so this covers
+both `server/` and `web/`:
+
+```bash
+npm install
+```
+
 ```bash
 # 1. Database
 createdb yahala
@@ -40,13 +48,8 @@ psql -c "CREATE ROLE yahala LOGIN PASSWORD 'yahala_dev'" -c "ALTER DATABASE yaha
 # 2. API
 cd server
 cp .env.example .env          # then edit DATABASE_URL, JWT_SECRET, ADMIN_PASSWORD
-npm install
 npm run migrate               # create the tables
 npm run seed                  # load merchants and dashboard defaults
-
-# 3. Frontend
-cd ../web
-npm install
 ```
 
 `npm run seed` refuses to overwrite a database that already holds merchants;
@@ -199,6 +202,34 @@ after a week of no activity and are resumed from the dashboard.
 
 Add the domain under the service's **Settings → Custom Domains** in Render and
 create the DNS record it shows. TLS is issued automatically.
+
+### Deploying to Vercel instead
+
+Vercel can host the portal too: it serves the built frontend from its CDN and
+runs `api/index.js`, which is the same Express app as a serverless function.
+`vercel.json` already routes `/api/*` and `/uploads/*` there. Import the
+repository at vercel.com/new and set `DATABASE_URL`, `JWT_SECRET` and
+`ADMIN_PASSWORD` as environment variables.
+
+Two differences from the container deployments:
+
+- **Create the schema yourself.** There is no boot step to run migrations, so
+  run them once from your machine against the same database before the first
+  visit:
+
+  ```bash
+  cd server
+  DATABASE_URL="…?sslmode=require" npm run migrate
+  DATABASE_URL="…?sslmode=require" npm run seed
+  ```
+
+- **Uploads are capped at 3 MB** rather than 8, because a Vercel function may
+  not receive a request body larger than 4.5 MB and base64 adds a third. The
+  limit follows `MAX_UPLOAD_MB` if you set it.
+
+Use Supabase's **transaction pooler** (port 6543) on Vercel: serverless
+instances open many short-lived connections, which is exactly what that pooler
+is for. Each instance keeps a single connection.
 
 Managed PostgreSQL requires TLS; the pool enables it automatically when
 `DATABASE_URL` carries `sslmode=require` (or when `PGSSL=true` is set).

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { config } from './config.js';
 import { query } from './db/index.js';
 
 const EXTENSIONS = {
@@ -20,8 +21,6 @@ const BY_EXTENSION = {
   '.pdf': 'application/pdf',
 };
 
-const MAX_BYTES = 8 * 1024 * 1024;
-
 export const mimeForExtension = (ext) => BY_EXTENSION[String(ext).toLowerCase()] || null;
 
 /**
@@ -35,8 +34,9 @@ export async function storeBuffer(buffer, mime, db = { query }) {
     throw Object.assign(new Error(`Unsupported file type: ${mime}`), { status: 415 });
   }
   if (!buffer.length) throw Object.assign(new Error('Empty file.'), { status: 400 });
-  if (buffer.length > MAX_BYTES) {
-    throw Object.assign(new Error('File is larger than 8 MB.'), { status: 413 });
+  if (buffer.length > config.maxUploadBytes) {
+    const mb = Math.round(config.maxUploadBytes / (1024 * 1024));
+    throw Object.assign(new Error(`File is larger than ${mb} MB.`), { status: 413 });
   }
 
   const hash = crypto.createHash('sha256').update(buffer).digest('hex').slice(0, 32);

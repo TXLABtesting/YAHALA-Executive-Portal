@@ -5,6 +5,8 @@ server/uploads
 screenshots
 uploads
 canvas
+api
+vercel.json
 .git
 *.dc.html
 yahala-executive-portal.html

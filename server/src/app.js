@@ -16,13 +16,13 @@ import { redeemersRouter } from './routes/redeemers.js';
 import { updatesRouter } from './routes/updates.js';
 import { uploadsRouter } from './routes/uploads.js';
 
-export function createApp() {
+export function createApp({ serveStatic = !process.env.VERCEL } = {}) {
   const app = express();
 
   app.set('trust proxy', 1);
-  // Logos and newsletter covers are data: URIs on the wire before they are
-  // written to disk, so the JSON body limit has to clear an 8 MB file.
-  app.use(express.json({ limit: '12mb' }));
+  // Logos and covers arrive as base64 data: URIs, which are about a third
+  // larger than the file, so the body limit has to clear the upload limit.
+  app.use(express.json({ limit: config.jsonBodyLimit }));
   app.use(cookieParser());
   app.use(
     cors({
@@ -50,8 +50,9 @@ export function createApp() {
   // check as the rest of the portal.
   app.use('/uploads', requireAuth, filesRouter);
 
-  // In production the API also serves the built frontend.
-  if (fs.existsSync(config.webDistDir)) {
+  // In the single-process setup the API also serves the built frontend. On a
+  // platform that serves the static build itself (Vercel), this is skipped.
+  if (serveStatic && fs.existsSync(config.webDistDir)) {
     app.use(express.static(config.webDistDir, { index: false }));
     app.get(/^(?!\/api\/|\/uploads\/).*/, (_req, res) => {
       res.sendFile(path.join(config.webDistDir, 'index.html'));
