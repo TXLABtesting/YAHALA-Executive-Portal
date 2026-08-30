@@ -11,6 +11,20 @@ assets/    Original brand assets and the generated merchant seed (data.js)
 data/      Merchant exports the seed was built from
 ```
 
+## Quickest way to see it running
+
+With Docker installed, one command brings up the portal and its database:
+
+```bash
+docker compose up --build     # then open http://localhost:8080
+```
+
+The first boot creates the schema and loads the merchant data. Set
+`ADMIN_PASSWORD`, `JWT_SECRET` and `PORT` in the environment (or a `.env` file
+beside `docker-compose.yml`) to override the defaults.
+
+To run it without Docker, follow the setup below.
+
 ## Requirements
 
 - Node.js 20 or newer
