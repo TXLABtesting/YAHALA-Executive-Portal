@@ -1,0 +1,41 @@
+# Render blueprint for the portal, using an external PostgreSQL database
+# (Supabase). Connect the repository at https://dashboard.render.com/blueprints;
+# Render builds the Dockerfile and asks for the two values marked `sync: false`.
+#
+# DATABASE_URL must be Supabase's *connection pooler* string — the one whose
+# host looks like aws-0-<region>.pooler.supabase.com. The direct db.<ref>
+# .supabase.co host resolves to IPv6 only, which Render cannot reach.
+#
+# To let Render host the database instead, add this block back and point
+# DATABASE_URL at it with `fromDatabase` instead of `sync: false`:
+#
+#   databases:
+#     - name: yahala-db
+#       databaseName: yahala
+#       user: yahala
+#       plan: free        # deleted after 30 days on the free tier
+#
+# A free web service sleeps after 15 minutes without traffic and takes about a
+# minute to wake up.
+
+services:
+  - type: web
+    name: yahala-portal
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    # Uploaded files live in the database, so the instance needs no disk.
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Paste the Supabase connection pooler URI, ending in ?sslmode=require.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      # Set this before the first deploy — it becomes the sign-in password.
+      - key: ADMIN_PASSWORD
+        sync: false

@@ -1,0 +1,35 @@
+# Runs the portal and its database together:
+#   docker compose up --build     →  http://localhost:8080
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: yahala
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-yahala_dev}
+      POSTGRES_DB: yahala
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U yahala -d yahala']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://yahala:${DB_PASSWORD:-yahala_dev}@db:5432/yahala
+      PORT: 4000
+      # Override both of these before exposing the portal to anyone.
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+    ports:
+      - '${PORT:-8080}:4000'
+
+volumes:
+  db-data:

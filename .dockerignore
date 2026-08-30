@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/dist
+server/uploads
+screenshots
+uploads
+canvas
+db
+api
+vercel.json
+.git
+*.dc.html
+yahala-executive-portal.html

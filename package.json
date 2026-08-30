@@ -1,0 +1,21 @@
+{
+  "name": "yahala-executive-portal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Executive portal for the YAHALA Royal Platinum Membership Network",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace web",
+    "start": "npm start --workspace server",
+    "migrate": "npm run migrate --workspace server",
+    "seed": "npm run seed --workspace server",
+    "db:check": "npm run db:check --workspace server"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

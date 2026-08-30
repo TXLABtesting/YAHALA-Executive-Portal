@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { setAdminPassword } from '../src/auth.js';
 import { config } from '../src/config.js';
 import { applySchema, pool, query, withTransaction } from '../src/db/index.js';
-import { ensureUploadDir } from '../src/uploads.js';
+import { storeBuffer, mimeForExtension } from '../src/files.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
@@ -34,17 +34,23 @@ function loadSeedData() {
   };
 }
 
-/** Copies a bundled asset into the upload directory and returns its URL. */
-function importAsset(relativePath) {
+/** Stores a bundled asset in the files table and returns its URL. */
+const assetUrls = new Map();
+
+async function importAsset(relativePath, client) {
+  if (assetUrls.has(relativePath)) return assetUrls.get(relativePath);
+
   const source = path.join(assetsDir, relativePath);
-  if (!fs.existsSync(source)) return null;
-  ensureUploadDir();
-  const name = path.basename(relativePath);
-  fs.copyFileSync(source, path.join(config.uploadDir, name));
-  return `/uploads/${name}`;
+  const mime = mimeForExtension(path.extname(relativePath));
+  if (!fs.existsSync(source) || !mime) return null;
+
+  const url = await storeBuffer(fs.readFileSync(source), mime, client);
+  assetUrls.set(relativePath, url);
+  return url;
 }
 
-const logoUrl = (logo) => (logo ? importAsset(path.relative('assets', logo) || logo) : null);
+const logoUrl = (logo, client) =>
+  logo ? importAsset(path.relative('assets', logo) || logo, client) : null;
 
 const DEFAULT_KPIS = {
   offers: 612,
@@ -116,15 +122,23 @@ const REDEEMERS = [
 const ACCOMMODATION = { total: 214, from: '2026-01-01', to: '2026-07-07' };
 
 async function insertMerchants(client, rows, archived) {
+  // Logos are content-addressed and there are only a handful of distinct ones,
+  // so resolving them first collapses thousands of lookups into a few writes.
+  const logos = [];
+  for (const m of rows) logos.push(await logoUrl(m.logo, client));
+
+  const COLUMNS = 13;
+  const BATCH = 200;
   const ids = new Map();
-  for (const m of rows) {
-    const { rows: inserted } = await client.query(
-      `INSERT INTO merchants
-         (name, category, sub, offer_type, offer_desc, offers, offer_source,
-          status, city, logo, reason, expiry_label, archived)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-       RETURNING id, name`,
-      [
+
+  // One statement per batch rather than per row: against a remote database
+  // that is the difference between a few seconds and a few minutes.
+  for (let start = 0; start < rows.length; start += BATCH) {
+    const batch = rows.slice(start, start + BATCH);
+    const values = [];
+    const placeholders = batch.map((m, i) => {
+      const base = i * COLUMNS;
+      values.push(
         m.name || '',
         m.category || 'Fashion & Retail',
         m.sub || '',
@@ -134,14 +148,25 @@ async function insertMerchants(client, rows, archived) {
         m.offerSource === 'Entertainer' ? 'Entertainer' : 'YAHALA Exclusive',
         archived ? 'Inactive' : m.status || 'Live',
         m.city || '',
-        logoUrl(m.logo),
+        logos[start + i],
         m.reason || '',
         m.expiryLabel || '',
         archived,
-      ],
+      );
+      return `(${Array.from({ length: COLUMNS }, (_, c) => `$${base + c + 1}`).join(',')})`;
+    });
+
+    const { rows: inserted } = await client.query(
+      `INSERT INTO merchants
+         (name, category, sub, offer_type, offer_desc, offers, offer_source,
+          status, city, logo, reason, expiry_label, archived)
+       VALUES ${placeholders.join(',')}
+       RETURNING id, name`,
+      values,
     );
-    if (!archived) ids.set(inserted[0].name.toLowerCase(), inserted[0].id);
+    if (!archived) for (const row of inserted) ids.set(row.name.toLowerCase(), row.id);
   }
+
   return ids;
 }
 
@@ -163,7 +188,7 @@ async function main() {
     await client.query('DELETE FROM spotlight_pool');
     await client.query('UPDATE spotlight SET pinned_id = NULL WHERE id = 1');
     await client.query(
-      'TRUNCATE merchants, newsletters, launches, updates, redeemers RESTART IDENTITY CASCADE',
+      'TRUNCATE merchants, newsletters, launches, updates, redeemers, files RESTART IDENTITY CASCADE',
     );
 
     const liveIds = await insertMerchants(client, active, false);
@@ -183,7 +208,7 @@ async function main() {
       await client.query(
         `INSERT INTO newsletters (title, issue_date, description, thumb)
          VALUES ($1,$2,$3,$4)`,
-        [n.title, n.date, n.desc, importAsset(n.thumb)],
+        [n.title, n.date, n.desc, await importAsset(n.thumb, client)],
       );
     }
 

@@ -6,7 +6,20 @@ import { config } from '../config.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-export const pool = new pg.Pool({ connectionString: config.databaseUrl });
+// Managed Postgres (Render, Neon, Supabase, RDS) requires TLS. Their
+// certificates are issued by the provider rather than a public CA, so verify
+// only when a CA bundle is supplied via PGSSLROOTCERT.
+const needsSsl =
+  /[?&]sslmode=(require|verify-ca|verify-full)/.test(config.databaseUrl) ||
+  process.env.PGSSL === 'true';
+
+export const pool = new pg.Pool({
+  connectionString: config.databaseUrl,
+  // Each serverless instance keeps its own pool, so it may hold only one
+  // connection; a long-running server can use several.
+  max: Number(process.env.PGPOOL_MAX) || (process.env.VERCEL ? 1 : 10),
+  ...(needsSsl ? { ssl: { rejectUnauthorized: Boolean(process.env.PGSSLROOTCERT) } } : null),
+});
 
 export function query(text, params) {
   return pool.query(text, params);
