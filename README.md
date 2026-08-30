@@ -146,6 +146,22 @@ session.
 `GET /api/bootstrap` returns everything the portal renders in one response, so
 a page load is a single round trip.
 
+### Checking a deployment
+
+`GET /api/health` is open and reports whether the portal can actually serve
+requests — open `https://your-site/api/health` first when something is wrong:
+
+```json
+{ "ok": true, "database": "connected", "schema": "ready", "merchants": 2035, "administrators": 1 }
+```
+
+When it fails it names the cause and what to do about it: `not_configured`
+(DATABASE_URL missing), `host_not_found`, `unreachable` (often the IPv6-only
+direct Supabase host), `authentication_failed`, `not_found` (no such database),
+`tls_rejected`, or `schema: "missing"` when the tables have not been imported.
+It reports configuration state only — never data, credentials or the
+connection string.
+
 ### Uploads
 
 Logos, newsletter covers and PDFs are posted as base64 `data:` URIs and stored

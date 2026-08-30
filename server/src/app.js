@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 import { attachSession, requireAuth } from './auth.js';
+import { readHealth } from './health.js';
 import { authRouter } from './routes/auth.js';
 import { filesRouter } from './routes/files.js';
 import { bootstrapRouter } from './routes/bootstrap.js';
@@ -32,7 +33,11 @@ export function createApp({ serveStatic = !process.env.VERCEL } = {}) {
   );
   app.use(attachSession);
 
-  app.get('/api/health', (_req, res) => res.json({ ok: true }));
+  // Open on purpose: it is the first thing to check when a deployment misbehaves.
+  app.get('/api/health', async (_req, res) => {
+    const health = await readHealth();
+    res.status(health.ok ? 200 : 503).json(health);
+  });
   app.use('/api/auth', authRouter);
 
   // Everything below needs a session — viewer for reads, admin for writes
