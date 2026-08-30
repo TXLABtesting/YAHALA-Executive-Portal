@@ -269,8 +269,16 @@ Use Supabase's **transaction pooler** (port 6543) on Vercel: serverless
 instances open many short-lived connections, which is exactly what that pooler
 is for. Each instance keeps a single connection.
 
-Managed PostgreSQL requires TLS; the pool enables it automatically when
-`DATABASE_URL` carries `sslmode=require` (or when `PGSSL=true` is set).
+Managed PostgreSQL requires TLS. The pool uses TLS for any non-local database,
+encrypting without verifying the certificate chain — which is what
+`sslmode=require` means, and what hosted databases whose CA is not in the system
+trust store need. To verify the chain instead, point `PGSSLROOTCERT` at the
+provider's CA bundle. `sslmode=disable` in the URL turns TLS off.
+
+The `sslmode` parameter is stripped from the connection string before it
+reaches the driver: pg 8.23 reads `sslmode=require` as `verify-full` and then
+ignores the explicit TLS settings, which rejects a hosted database with
+"self-signed certificate in certificate chain".
 
 - Set a long random `JWT_SECRET`; the default is for development only.
 - Run behind TLS — the session cookie sets `secure` when `NODE_ENV=production`.
