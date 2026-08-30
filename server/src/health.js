@@ -52,13 +52,15 @@ export function diagnose(err) {
   }
   // Supabase's pooler (Supavisor) rejects an unknown tenant when the user name
   // is not in the postgres.<project-ref> form its URI uses.
-  if (/tenant or user not found/i.test(message)) {
+  if (/tenant.*not found/i.test(message)) {
     return {
       database: 'authentication_failed',
       hint:
-        'The connection pooler did not recognise the user. Copy the URI from ' +
-        "Supabase's Connect dialog exactly — on the pooler the user name has the " +
-        'form postgres.<project-ref>, not plain postgres.',
+        'The connection pooler does not recognise that user. On the pooler the ' +
+        'user name is postgres.<project-ref>, where the reference is your own ' +
+        "project's (Supabase: Project Settings -> General -> Reference ID). Copy " +
+        'the URI from the Connect dialog rather than typing it, and make sure no ' +
+        'placeholder text is left in it.',
     };
   }
   if (/max client connections reached|too many clients/i.test(message)) {
