@@ -1,0 +1,38 @@
+# Render blueprint: managed PostgreSQL plus the portal container.
+# Connect the repository at https://dashboard.render.com/blueprints and Render
+# builds the Dockerfile, provisions the database and wires DATABASE_URL in.
+
+databases:
+  - name: yahala-db
+    databaseName: yahala
+    user: yahala
+    plan: basic-256mb
+
+services:
+  - type: web
+    name: yahala-portal
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    # A disk keeps uploaded logos, covers and PDFs across restarts, and needs a
+    # paid instance type. On a free instance drop the `disk:` block — everything
+    # works except that uploaded files are lost when the instance restarts.
+    plan: starter
+    disk:
+      name: uploads
+      mountPath: /app/server/uploads
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: yahala-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      # Set this in the Render dashboard before the first deploy.
+      - key: ADMIN_PASSWORD
+        sync: false

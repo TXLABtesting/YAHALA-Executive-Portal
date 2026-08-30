@@ -142,7 +142,20 @@ writes them to `server/uploads/` under a content hash and stores the resulting
 volume at `server/uploads/` (or swap `src/uploads.js` for object storage) when
 deploying.
 
-## Notes for deployment
+## Deploying
+
+`render.yaml` is a ready blueprint: connect the repository at
+dashboard.render.com/blueprints and Render builds the Dockerfile, provisions
+PostgreSQL and injects `DATABASE_URL`. Set `ADMIN_PASSWORD` in the dashboard
+before the first deploy. The same image runs unchanged on Railway, Fly.io or
+any Docker host.
+
+The uploads directory needs a persistent volume (the blueprint mounts one at
+`/app/server/uploads`). Without it the portal still works, but files uploaded
+through the admin screens are lost when the container restarts.
+
+Managed PostgreSQL requires TLS; the pool enables it automatically when
+`DATABASE_URL` carries `sslmode=require` (or when `PGSSL=true` is set).
 
 - Set a long random `JWT_SECRET`; the default is for development only.
 - Run behind TLS — the session cookie sets `secure` when `NODE_ENV=production`.
