@@ -155,7 +155,8 @@ requests — open `https://your-site/api/health` first when something is wrong:
 { "ok": true, "database": "connected", "schema": "ready", "merchants": 2035, "administrators": 1 }
 ```
 
-When it fails it names the cause and what to do about it: `not_configured`
+When it fails it names the cause and what to do about it: `sessions:
+"not_configured"` (JWT_SECRET missing), `not_configured`
 (DATABASE_URL missing), `host_not_found`, `unreachable` (often the IPv6-only
 direct Supabase host), `authentication_failed`, `not_found` (no such database),
 `tls_rejected`, or `schema: "missing"` when the tables have not been imported.
@@ -280,7 +281,10 @@ reaches the driver: pg 8.23 reads `sslmode=require` as `verify-full` and then
 ignores the explicit TLS settings, which rejects a hosted database with
 "self-signed certificate in certificate chain".
 
-- Set a long random `JWT_SECRET`; the default is for development only.
+- `JWT_SECRET` is required in production: a deployment without one refuses to
+  issue sessions rather than falling back to the development key, which is in
+  this repository and would let anyone mint an administrator session. Generate
+  one with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
 - Run behind TLS — the session cookie sets `secure` when `NODE_ENV=production`.
 - `CORS_ORIGIN` only matters when the frontend is served from another origin;
   the single-process production setup above does not need it.

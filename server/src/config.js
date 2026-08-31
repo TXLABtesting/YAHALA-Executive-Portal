@@ -14,7 +14,8 @@ export const config = {
     process.env.DATABASE_URL ||
     (isDeployed ? '' : 'postgres://yahala:yahala_dev@127.0.0.1:5432/yahala'),
   port: Number(process.env.PORT) || 4000,
-  jwtSecret: process.env.JWT_SECRET || 'yahala-development-secret',
+  jwtSecret:
+    process.env.JWT_SECRET || (isDeployed ? '' : 'yahala-development-secret'),
   adminUsername: process.env.ADMIN_USERNAME || 'admin',
   adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
   corsOrigins: (process.env.CORS_ORIGIN || 'http://localhost:5173')

@@ -6,6 +6,17 @@ import { query } from './db/index.js';
 
 const COOKIE = 'yahala_session';
 
+function assertSigningKey() {
+  if (config.jwtSecret) return;
+  throw Object.assign(
+    new Error(
+      'Sessions are not configured: JWT_SECRET is missing. Add it to the ' +
+        'environment variables of your hosting platform and redeploy.',
+    ),
+    { status: 503, expose: true },
+  );
+}
+
 const cookieOptions = {
   httpOnly: true,
   sameSite: 'lax',
@@ -15,6 +26,7 @@ const cookieOptions = {
 };
 
 export function issueSession(res, role) {
+  assertSigningKey();
   const token = jwt.sign({ role }, config.jwtSecret, {
     expiresIn: Math.floor(config.sessionMaxAgeMs / 1000),
   });
@@ -28,7 +40,7 @@ export function clearSession(res) {
 
 export function readSession(req) {
   const token = req.cookies?.[COOKIE];
-  if (!token) return null;
+  if (!token || !config.jwtSecret) return null;
   try {
     const payload = jwt.verify(token, config.jwtSecret);
     return payload.role === 'admin' || payload.role === 'viewer' ? payload : null;

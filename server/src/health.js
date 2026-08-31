@@ -108,6 +108,13 @@ export function diagnose(err) {
  * without a session: it exposes configuration state, never data or secrets.
  */
 export async function readHealth() {
+  if (!config.jwtSecret) {
+    return {
+      ok: false,
+      sessions: 'not_configured',
+      hint: 'JWT_SECRET is not set. Add it to the environment and redeploy.',
+    };
+  }
   if (!config.databaseUrl) {
     return {
       ok: false,
