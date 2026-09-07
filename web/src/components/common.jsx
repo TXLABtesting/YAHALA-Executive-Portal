@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '../lib/icons.jsx';
 import { initials, sourceMeta } from '../lib/format.js';
 
@@ -99,7 +100,13 @@ export function DrawerHead({ icon, iconGold, title, sub, onClose, children }) {
   );
 }
 
-/** Closes on backdrop click and on Escape; content clicks never bubble out. */
+/**
+ * Closes on backdrop click and on Escape; content clicks never bubble out.
+ *
+ * Rendered into document.body: an overlay opened from inside the admin page
+ * would otherwise sit in that page's stacking context, which the animated
+ * `main.page` wrapper establishes, and paint underneath it.
+ */
 export function Overlay({ variant = '', onClose, children }) {
   useEffect(() => {
     const onKey = (e) => {
@@ -109,11 +116,12 @@ export function Overlay({ variant = '', onClose, children }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div className={`overlay ${variant}`.trim()} role="presentation" onClick={onClose}>
       <div className="contents" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
