@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../lib/icons.jsx';
 import {
+  CATEGORIES,
   UPDATE_META,
   fmtDate,
   fmtNum,
@@ -9,11 +10,12 @@ import {
   stageColor,
   stagePct,
 } from '../lib/format.js';
+import ImportMerchants from './ImportMerchants.jsx';
 import { KPI_FIELDS } from './dashboard/Kpis.jsx';
 import { RowAvatar, SectionHead, SegGroup, SourceBadge, StatusPill } from './common.jsx';
 
-const MERCHANT_LIMIT = 60;
-const ARCHIVE_LIMIT = 80;
+const MERCHANT_PAGE = 60;
+const ARCHIVE_PAGE = 60;
 
 const SOURCE_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -38,6 +40,8 @@ const NEW_ARCHIVED = { ...NEW_MERCHANT, status: 'Inactive', reason: 'Inactive', 
 
 export default function Admin({
   data,
+  reload,
+  notify,
   openEdit,
   removeItem,
   saveKpis,
@@ -76,7 +80,15 @@ export default function Admin({
         ))}
       </div>
 
-      {tab === 'merchants' && <MerchantsTab data={data} openEdit={openEdit} removeItem={removeItem} />}
+      {tab === 'merchants' && (
+        <MerchantsTab
+          data={data}
+          reload={reload}
+          notify={notify}
+          openEdit={openEdit}
+          removeItem={removeItem}
+        />
+      )}
       {tab === 'dashboard' && (
         <DashboardTab data={data} saveKpis={saveKpis} saveSpotlight={saveSpotlight} />
       )}
@@ -93,22 +105,82 @@ export default function Admin({
   );
 }
 
+/** Category filter, built from the categories actually present in the list. */
+function CategoryTabs({ merchants, value, onChange }) {
+  const categories = useMemo(() => {
+    const counts = new Map();
+    for (const m of merchants) counts.set(m.category, (counts.get(m.category) || 0) + 1);
+    const known = CATEGORIES.filter((c) => counts.has(c));
+    const extra = [...counts.keys()].filter((c) => c && !CATEGORIES.includes(c)).sort();
+    return [...known, ...extra].map((name) => ({ name, count: counts.get(name) }));
+  }, [merchants]);
+
+  if (categories.length < 2) return null;
+
+  return (
+    <div className="cat-tabs" role="tablist" aria-label="Filter by category">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={value === 'all'}
+        className={`cat-tab${value === 'all' ? ' is-active' : ''}`}
+        onClick={() => onChange('all')}
+      >
+        All <span className="cat-tab-count">{merchants.length}</span>
+      </button>
+      {categories.map((c) => (
+        <button
+          key={c.name}
+          type="button"
+          role="tab"
+          aria-selected={value === c.name}
+          className={`cat-tab${value === c.name ? ' is-active' : ''}`}
+          onClick={() => onChange(c.name)}
+        >
+          {c.name} <span className="cat-tab-count">{c.count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ShowMore({ shown, total, page, onMore }) {
+  if (shown >= total) return null;
+  return (
+    <div className="show-more">
+      <button type="button" className="btn-ghost" onClick={onMore}>
+        Show More
+        <span className="show-more-note">
+          {Math.min(page, total - shown)} of {total - shown} remaining
+        </span>
+      </button>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------ merchants -- */
 
-function MerchantsTab({ data, openEdit, removeItem }) {
+function MerchantsTab({ data, reload, notify, openEdit, removeItem }) {
   const [search, setSearch] = useState('');
   const [source, setSource] = useState('all');
+  const [category, setCategory] = useState('all');
+  const [visible, setVisible] = useState(MERCHANT_PAGE);
+  const [importing, setImporting] = useState(false);
 
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
     return data.merchants.filter(
       (m) =>
         (source === 'all' || m.offerSource === source) &&
+        (category === 'all' || m.category === category) &&
         (!q || `${m.name} ${m.category} ${m.sub}`.toLowerCase().includes(q)),
     );
-  }, [data.merchants, search, source]);
+  }, [data.merchants, search, source, category]);
 
-  const shown = matches.slice(0, MERCHANT_LIMIT);
+  // Any change to the filters starts the list from the top again.
+  useEffect(() => setVisible(MERCHANT_PAGE), [search, source, category]);
+
+  const shown = matches.slice(0, visible);
 
   return (
     <div>
@@ -125,15 +197,26 @@ function MerchantsTab({ data, openEdit, removeItem }) {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button type="button" className="btn-primary" onClick={() => openEdit('merchant', null, NEW_MERCHANT)}>
-          <Icon name="plus" size={16} stroke={2} /> Add Merchant
-        </button>
+        <div className="toolbar-actions">
+          <button type="button" className="btn-ghost" onClick={() => setImporting(true)}>
+            <Icon name="download" size={16} stroke={1.8} /> Upload Merchants
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => openEdit('merchant', null, NEW_MERCHANT)}
+          >
+            <Icon name="plus" size={16} stroke={2} /> Add Merchant
+          </button>
+        </div>
       </div>
 
       <div className="filter-row">
         <span>OFFER SOURCE</span>
         <SegGroup options={SOURCE_OPTIONS} value={source} onChange={setSource} />
       </div>
+
+      <CategoryTabs merchants={data.merchants} value={category} onChange={setCategory} />
 
       <div className="result-note">
         Showing {shown.length} of {matches.length} merchants
@@ -175,6 +258,21 @@ function MerchantsTab({ data, openEdit, removeItem }) {
           </div>
         ))}
       </div>
+
+      <ShowMore
+        shown={shown.length}
+        total={matches.length}
+        page={MERCHANT_PAGE}
+        onMore={() => setVisible((v) => v + MERCHANT_PAGE)}
+      />
+
+      {importing && (
+        <ImportMerchants
+          notify={notify}
+          onImported={reload}
+          onClose={() => setImporting(false)}
+        />
+      )}
     </div>
   );
 }
@@ -575,15 +673,21 @@ function UpdatesTab({ data, openEdit, removeItem }) {
 
 function ArchiveTab({ data, openEdit, removeItem }) {
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
+  const [visible, setVisible] = useState(ARCHIVE_PAGE);
 
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
     return data.archive.filter(
-      (m) => !q || `${m.name} ${m.category} ${m.sub}`.toLowerCase().includes(q),
+      (m) =>
+        (category === 'all' || m.category === category) &&
+        (!q || `${m.name} ${m.category} ${m.sub}`.toLowerCase().includes(q)),
     );
-  }, [data.archive, search]);
+  }, [data.archive, search, category]);
 
-  const shown = matches.slice(0, ARCHIVE_LIMIT);
+  useEffect(() => setVisible(ARCHIVE_PAGE), [search, category]);
+
+  const shown = matches.slice(0, visible);
 
   return (
     <div>
@@ -614,6 +718,8 @@ function ArchiveTab({ data, openEdit, removeItem }) {
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
+
+      <CategoryTabs merchants={data.archive} value={category} onChange={setCategory} />
 
       <div className="result-note">
         Showing {shown.length} of {matches.length} inactive merchants
@@ -659,6 +765,13 @@ function ArchiveTab({ data, openEdit, removeItem }) {
           </div>
         ))}
       </div>
+
+      <ShowMore
+        shown={shown.length}
+        total={matches.length}
+        page={ARCHIVE_PAGE}
+        onMore={() => setVisible((v) => v + ARCHIVE_PAGE)}
+      />
     </div>
   );
 }

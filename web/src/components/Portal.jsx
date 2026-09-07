@@ -231,6 +231,7 @@ export default function Portal({ role, data, setData, reload, loading, notify, o
         <Admin
           data={data}
           reload={reload}
+          notify={notify}
           openEdit={openEdit}
           removeItem={removeItem}
           saveKpis={saveKpis}

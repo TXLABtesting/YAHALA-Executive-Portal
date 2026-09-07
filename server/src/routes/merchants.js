@@ -11,6 +11,7 @@ import {
   oneOf,
   textIn,
 } from '../mappers.js';
+import { analyseWorkbook, buildTemplate, importRows } from './merchants-bulk.js';
 
 export const merchantsRouter = Router();
 
@@ -118,6 +119,44 @@ merchantsRouter.delete('/:id', requireAdmin, async (req, res, next) => {
     });
     if (!deleted) return res.status(404).json({ error: 'Merchant not found.' });
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ---------------------------------------------------------- bulk upload -- */
+
+// The template is generated from the same field definitions the import
+// validates against, so the two can never drift apart.
+merchantsRouter.get('/template', requireAdmin, async (_req, res, next) => {
+  try {
+    const workbook = await buildTemplate();
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', 'attachment; filename="yahala-merchants-template.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Called twice: once to preview (commit omitted), then to write the valid rows.
+merchantsRouter.post('/import', requireAdmin, async (req, res, next) => {
+  try {
+    const data = String(req.body?.data || '');
+    const base64 = data.startsWith('data:') ? data.slice(data.indexOf(',') + 1) : data;
+    if (!base64) {
+      return res.status(400).json({ error: 'No spreadsheet was uploaded.' });
+    }
+
+    const report = await analyseWorkbook(Buffer.from(base64, 'base64'));
+    if (!req.body?.commit) return res.json({ ...report, imported: 0 });
+
+    const created = await importRows(report.rows);
+    res.json({ ...report, imported: created.length });
   } catch (err) {
     next(err);
   }

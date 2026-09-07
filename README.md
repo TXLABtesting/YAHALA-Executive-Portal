@@ -142,6 +142,8 @@ session.
 | `GET`              | `/api/kpis`, `/api/spotlight`, `/api/accommodation`, `/api/settings` | signed in |
 | `PUT`              | the same resources      | admin |
 | `POST`             | `/api/uploads`          | admin |
+| `GET`              | `/api/merchants/template` | admin |
+| `POST`             | `/api/merchants/import` | admin |
 
 `GET /api/bootstrap` returns everything the portal renders in one response, so
 a page load is a single round trip.
@@ -162,6 +164,22 @@ direct Supabase host), `authentication_failed`, `not_found` (no such database),
 `tls_rejected`, or `schema: "missing"` when the tables have not been imported.
 It reports configuration state only — never data, credentials or the
 connection string.
+
+### Bulk merchant upload
+
+`GET /api/merchants/template` returns an Excel workbook generated from
+`server/src/merchant-fields.js`, which mirrors the Add Merchant form field for
+field — so the template can never drift from the form. Columns with a fixed set
+of values (Category, Offer Source, Status, City) carry real drop-down
+validation, and a second sheet documents each column with an example row.
+
+`POST /api/merchants/import` takes the filled workbook as a base64 `data:` URI.
+Without `commit` it only reports: every row is checked against the same rules
+the form applies — required fields, known categories, sources and statuses,
+whole-number offer counts — plus duplicates against the portal and within the
+file itself. With `commit: true` it inserts the valid rows in one transaction,
+using the same insert as Add Merchant, and resyncs `kpi.merchants`. Invalid
+rows are never written, and a logo cannot be set from a spreadsheet.
 
 ### Uploads
 

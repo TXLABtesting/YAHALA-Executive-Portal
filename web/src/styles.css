@@ -3068,6 +3068,250 @@ textarea.field-input {
 
 /* ---------------------------------------------------------------- misc */
 
+/* ------------------------------------------- category tabs & pagination -- */
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cat-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.cat-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--ink2);
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: var(--sh1);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.cat-tab:hover {
+  border-color: var(--platinum);
+  color: var(--navy);
+}
+
+.cat-tab.is-active {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
+.cat-tab-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: var(--paper);
+  color: var(--ink3);
+}
+
+.cat-tab.is-active .cat-tab-count {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.show-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.show-more .btn-ghost {
+  gap: 10px;
+  padding: 11px 22px;
+}
+
+.show-more-note {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--ink3);
+}
+
+.show-more .btn-ghost:hover .show-more-note {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* --------------------------------------------------- bulk merchant upload -- */
+
+.edit-modal.is-wide {
+  max-width: 820px;
+}
+
+label.btn-primary,
+label.btn-ghost {
+  cursor: pointer;
+}
+
+.btn-primary.is-busy {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.import-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.import-steps li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 15px 16px;
+  border-radius: 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+.import-step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.import-step-title {
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--navy);
+}
+
+.import-step-note {
+  font-size: 12px;
+  color: var(--ink3);
+  margin-top: 3px;
+  line-height: 1.45;
+}
+
+.import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.import-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--ink2);
+}
+
+.import-chip.is-ok {
+  background: rgba(31, 138, 91, 0.1);
+  border-color: rgba(31, 138, 91, 0.25);
+  color: #1f8a5b;
+}
+
+.import-chip.is-bad {
+  background: #fce9e9;
+  border-color: #f0cccc;
+  color: #b64545;
+}
+
+.import-chip.is-warn {
+  background: var(--goldSoft);
+  border-color: var(--goldLine);
+  color: #8a6d2e;
+}
+
+.import-table {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  max-height: 42vh;
+  overflow-y: auto;
+}
+
+.import-row {
+  display: flex;
+  gap: 14px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--line2);
+  background: #fff;
+}
+
+.import-row:last-child {
+  border-bottom: none;
+}
+
+.import-row.is-bad {
+  background: #fdf6f6;
+}
+
+.import-row-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink3);
+  white-space: nowrap;
+  padding-top: 2px;
+  width: 58px;
+  flex-shrink: 0;
+}
+
+.import-row-name {
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--navy);
+}
+
+.import-row-meta {
+  font-size: 11.5px;
+  color: var(--ink3);
+  margin-top: 2px;
+}
+
+.import-row-msg {
+  font-size: 11.5px;
+  color: #8a6d2e;
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.import-row-msg.is-bad {
+  color: #b64545;
+}
+
+.import-row-more {
+  padding: 12px 15px;
+  font-size: 12px;
+  color: var(--ink3);
+  background: var(--paper);
+}
+
 .contents {
   display: contents;
 }
