@@ -179,7 +179,13 @@ the form applies — required fields, known categories, sources and statuses,
 whole-number offer counts — plus duplicates against the portal and within the
 file itself. With `commit: true` it inserts the valid rows in one transaction,
 using the same insert as Add Merchant, and resyncs `kpi.merchants`. Invalid
-rows are never written, and a logo cannot be set from a spreadsheet.
+rows are never written.
+
+A **Logo URL** column carries each merchant's logo: on import the server
+fetches the image, stores it in the `files` table like a manual upload, and
+points the merchant at it. A link that 404s, times out or is not an image
+leaves that merchant with its monogram and reports why — it never blocks the
+merchant from being created.
 
 ### Uploads
 

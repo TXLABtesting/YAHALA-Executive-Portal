@@ -78,10 +78,17 @@ export const MERCHANT_FIELDS = [
     width: 18,
     note: 'Only used when Status is Inactive. e.g. 29 Apr 2026.',
   },
+  {
+    key: 'logoUrl',
+    header: 'Logo URL',
+    width: 46,
+    note: "Optional. A direct link to the merchant's logo image (png, jpg, svg, webp). Fetched and stored on import.",
+  },
 ];
 
 export const EXAMPLE_ROW = {
   name: 'Example Boutique',
+  logoUrl: 'https://example.com/logo.png',
   category: 'Fashion & Retail',
   sub: 'Fashion',
   offerSource: 'YAHALA Exclusive',
@@ -168,6 +175,10 @@ export function validateRow(raw, { existingNames, seenNames }) {
   }
   if (merchant.status === 'Inactive') {
     warnings.push('Inactive — this merchant goes to the archive.');
+  }
+
+  if (merchant.logoUrl && !/^https?:\/\//i.test(merchant.logoUrl)) {
+    errors.push('Logo URL must start with http:// or https://.');
   }
 
   return { merchant, errors, warnings };

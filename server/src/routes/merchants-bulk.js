@@ -2,6 +2,8 @@ import ExcelJS from 'exceljs';
 import { query, withTransaction } from '../db/index.js';
 import { EXAMPLE_ROW, MERCHANT_FIELDS, validateRow } from '../merchant-fields.js';
 import { merchantOut } from '../mappers.js';
+import { config } from '../config.js';
+import { storeBuffer } from '../files.js';
 
 const SHEET = 'Merchants';
 const VALIDATION_ROWS = 500;
@@ -176,23 +178,79 @@ export async function analyseWorkbook(buffer) {
   };
 }
 
+const LOGO_TIMEOUT_MS = 10000;
+const LOGO_CONCURRENCY = 6;
+
+/**
+ * Downloads one merchant logo and stores it like a manual upload. Returns null
+ * on any failure — a logo that cannot be fetched must not stop the merchant
+ * from being created.
+ */
+async function fetchLogo(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOGO_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: controller.signal, redirect: 'follow' });
+    if (!res.ok) return { error: `responded ${res.status}` };
+
+    const mime = (res.headers.get('content-type') || '').split(';')[0].trim();
+    if (!mime.startsWith('image/')) return { error: `is not an image (${mime || 'unknown type'})` };
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length > config.maxUploadBytes) return { error: 'image is too large' };
+
+    return { url: await storeBuffer(buffer, mime) };
+  } catch (err) {
+    return { error: err.name === 'AbortError' ? 'timed out' : 'could not be reached' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Fetches the logos of the rows that carry one, a few at a time. */
+async function attachLogos(rows) {
+  const pending = rows.filter((r) => r.merchant.logoUrl);
+  let fetched = 0;
+
+  for (let i = 0; i < pending.length; i += LOGO_CONCURRENCY) {
+    const batch = pending.slice(i, i + LOGO_CONCURRENCY);
+    await Promise.all(
+      batch.map(async (r) => {
+        const result = await fetchLogo(r.merchant.logoUrl);
+        if (result.url) {
+          r.merchant.logo = result.url;
+          fetched += 1;
+        } else {
+          r.warnings.push(`Logo not added — the link ${result.error}.`);
+        }
+      }),
+    );
+  }
+  return fetched;
+}
+
 /** Writes the valid rows using the same insert the Add Merchant form uses. */
 export async function importRows(rows) {
-  const valid = rows.filter((r) => r.valid).map((r) => r.merchant);
-  if (!valid.length) return [];
+  const validRows = rows.filter((r) => r.valid);
+  if (!validRows.length) return { created: [], logosFetched: 0 };
 
-  return withTransaction(async (client) => {
+  // Logos are fetched before the transaction opens, so a slow link never holds
+  // a database transaction open.
+  const logosFetched = await attachLogos(validRows);
+  const valid = validRows.map((r) => r.merchant);
+
+  const created = await withTransaction(async (client) => {
     const created = [];
     for (const m of valid) {
       const { rows: inserted } = await client.query(
         `INSERT INTO merchants
            (name, category, sub, offer_type, offer_desc, offers, offer_source,
             status, city, logo, reason, expiry_label, archived)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,$10,$11,$12)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
          RETURNING *`,
         [
           m.name, m.category, m.sub, m.offerType, m.offerDesc, m.offers, m.offerSource,
-          m.status, m.city, m.reason, m.expiryLabel, m.status === 'Inactive',
+          m.status, m.city, m.logo ?? null, m.reason, m.expiryLabel, m.status === 'Inactive',
         ],
       );
       created.push(merchantOut(inserted[0]));
@@ -202,4 +260,6 @@ export async function importRows(rows) {
     );
     return created;
   });
+
+  return { created, logosFetched };
 }

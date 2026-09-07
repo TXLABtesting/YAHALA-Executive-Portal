@@ -160,8 +160,8 @@ merchantsRouter.post('/import', requireAdmin, async (req, res, next) => {
     const report = await analyseWorkbook(Buffer.from(base64, 'base64'));
     if (!req.body?.commit) return res.json({ ...report, imported: 0 });
 
-    const created = await importRows(report.rows);
-    res.json({ ...report, imported: created.length });
+    const { created, logosFetched } = await importRows(report.rows);
+    res.json({ ...report, imported: created.length, logosFetched });
   } catch (err) {
     next(err);
   }
