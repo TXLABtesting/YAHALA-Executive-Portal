@@ -3211,6 +3211,21 @@ label.btn-ghost {
   line-height: 1.45;
 }
 
+.import-step-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.import-step-actions .btn-soft {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.import-steps .toggle {
+  flex-shrink: 0;
+}
+
 .import-summary {
   display: flex;
   flex-wrap: wrap;

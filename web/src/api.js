@@ -42,9 +42,13 @@ export const api = {
     list: (archived = false) => request(`/merchants?archived=${archived}`),
     // The template is a file download, so it is fetched by navigation.
     templateUrl: '/api/merchants/template',
+    exportUrl: '/api/merchants/export',
     // Called without `commit` to preview, then again to write the valid rows.
-    import: (dataUri, commit = false) =>
-      request('/merchants/import', { method: 'POST', body: { data: dataUri, commit } }),
+    import: (dataUri, { commit = false, updateExisting = false } = {}) =>
+      request('/merchants/import', {
+        method: 'POST',
+        body: { data: dataUri, commit, updateExisting },
+      }),
   },
   newsletters: crud('newsletters'),
   launches: crud('launches'),

@@ -11,7 +11,7 @@ import {
   oneOf,
   textIn,
 } from '../mappers.js';
-import { analyseWorkbook, buildTemplate, importRows } from './merchants-bulk.js';
+import { analyseWorkbook, buildExport, buildTemplate, importRows } from './merchants-bulk.js';
 
 export const merchantsRouter = Router();
 
@@ -148,6 +148,25 @@ merchantsRouter.get('/template', requireAdmin, async (_req, res, next) => {
   }
 });
 
+// The same workbook as the template, pre-filled with the current merchants —
+// the starting point for filling in a column such as Logo URL in bulk.
+merchantsRouter.get('/export', requireAdmin, async (_req, res, next) => {
+  try {
+    const workbook = await buildExport();
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', 'attachment; filename="yahala-merchants.xlsx"');
+    res.setHeader('Content-Length', String(buffer.length));
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Called twice: once to preview (commit omitted), then to write the valid rows.
 merchantsRouter.post('/import', requireAdmin, async (req, res, next) => {
   try {
@@ -157,11 +176,13 @@ merchantsRouter.post('/import', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ error: 'No spreadsheet was uploaded.' });
     }
 
-    const report = await analyseWorkbook(Buffer.from(base64, 'base64'));
+    const report = await analyseWorkbook(Buffer.from(base64, 'base64'), {
+      updateExisting: Boolean(req.body?.updateExisting),
+    });
     if (!req.body?.commit) return res.json({ ...report, imported: 0 });
 
-    const { created, logosFetched } = await importRows(report.rows);
-    res.json({ ...report, imported: created.length, logosFetched });
+    const { created, logosFetched, logosFailed } = await importRows(report.rows);
+    res.json({ ...report, imported: created.length, logosFetched, logosFailed });
   } catch (err) {
     next(err);
   }

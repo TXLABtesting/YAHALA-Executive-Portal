@@ -16,6 +16,7 @@ export default function ImportMerchants({ onClose, onImported, notify }) {
   const [report, setReport] = useState(null);
   const [busy, setBusy] = useState(false);
   const [dataUri, setDataUri] = useState(null);
+  const [updateExisting, setUpdateExisting] = useState(false);
 
   const pickFile = async (e) => {
     const file = e.target.files?.[0];
@@ -28,7 +29,7 @@ export default function ImportMerchants({ onClose, onImported, notify }) {
     try {
       const uri = await readFileAsDataUrl(file);
       setDataUri(uri);
-      setReport(await api.merchants.import(uri, false));
+      setReport(await api.merchants.import(uri, { updateExisting }));
     } catch (err) {
       notify(err.message, 'error');
       setFileName('');
@@ -38,11 +39,29 @@ export default function ImportMerchants({ onClose, onImported, notify }) {
     }
   };
 
+  // Re-checks the same file when the update option is toggled.
+  const recheck = async (next) => {
+    setUpdateExisting(next);
+    if (!dataUri) return;
+    setBusy(true);
+    try {
+      setReport(await api.merchants.import(dataUri, { updateExisting: next }));
+    } catch (err) {
+      notify(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const commit = async () => {
     setBusy(true);
     try {
-      const result = await api.merchants.import(dataUri, true);
-      notify(`${result.imported} merchants added.`);
+      const result = await api.merchants.import(dataUri, { commit: true, updateExisting });
+      const notes = [
+        result.logosFetched ? `${result.logosFetched} logos fetched` : '',
+        result.logosFailed ? `${result.logosFailed} logo links could not be downloaded` : '',
+      ].filter(Boolean);
+      notify(`${result.imported} merchants saved${notes.length ? `, ${notes.join(', ')}` : ''}.`);
       await onImported();
       onClose();
     } catch (err) {
@@ -52,7 +71,11 @@ export default function ImportMerchants({ onClose, onImported, notify }) {
     }
   };
 
-  const rows = report?.rows ?? [];
+  /* Rejected rows first, then the ones that will be written: re-uploading an
+     exported sheet is mostly rows that change nothing, and those must not push
+     what needs attention past the end of the preview. */
+  const rank = (r) => (r.valid ? (r.writes ? 1 : 2) : 0);
+  const rows = [...(report?.rows ?? [])].sort((a, b) => rank(a) - rank(b) || a.row - b.row);
 
   return (
     <Overlay variant="is-edit" onClose={onClose}>
@@ -72,12 +95,18 @@ export default function ImportMerchants({ onClose, onImported, notify }) {
                 <div className="import-step-title">Download the template</div>
                 <div className="import-step-note">
                   Its columns are generated from the Add Merchant form, with drop-down lists for
-                  Category, Offer Source, Status and City.
+                  Category, Offer Source, Status and City. To fill something in for merchants you
+                  already have — logos, for instance — start from the current list instead.
                 </div>
               </div>
-              <a className="btn-soft" href={api.merchants.templateUrl} download>
-                <Icon name="download" size={15} stroke={1.7} /> Download Excel Template
-              </a>
+              <div className="import-step-actions">
+                <a className="btn-soft" href={api.merchants.templateUrl} download>
+                  <Icon name="download" size={15} stroke={1.7} /> Download Excel Template
+                </a>
+                <a className="btn-soft" href={api.merchants.exportUrl} download>
+                  <Icon name="store" size={15} stroke={1.7} /> Download Current Merchants
+                </a>
+              </div>
             </li>
 
             <li>
@@ -98,17 +127,42 @@ export default function ImportMerchants({ onClose, onImported, notify }) {
                 />
               </label>
             </li>
+            <li>
+              <span className="import-step-num">3</span>
+              <div className="flex-1">
+                <div className="import-step-title">Merchants already in the portal</div>
+                <div className="import-step-note">
+                  Off, a name that already exists is reported and skipped. On, its filled-in
+                  columns are updated and blank ones are left alone.
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`toggle${updateExisting ? ' is-on' : ''}`}
+                aria-pressed={updateExisting}
+                aria-label="Update merchants that already exist"
+                disabled={busy}
+                onClick={() => recheck(!updateExisting)}
+              >
+                <span />
+              </button>
+            </li>
           </ol>
 
           {report && (
             <>
               <div className="import-summary">
-                <span className="import-chip is-ok">{report.valid} ready to add</span>
+                <span className="import-chip is-ok">
+                  {report.creates} new {report.creates === 1 ? 'merchant' : 'merchants'}
+                </span>
+                {report.updates > 0 && (
+                  <span className="import-chip is-warn">{report.updates} will be updated</span>
+                )}
+                {report.unchanged > 0 && (
+                  <span className="import-chip">{report.unchanged} already up to date</span>
+                )}
                 {report.invalid > 0 && (
                   <span className="import-chip is-bad">{report.invalid} rejected</span>
-                )}
-                {report.warnings > 0 && (
-                  <span className="import-chip is-warn">{report.warnings} with notes</span>
                 )}
                 {report.blankRows > 0 && (
                   <span className="import-chip">{report.blankRows} blank rows skipped</span>
@@ -158,10 +212,10 @@ export default function ImportMerchants({ onClose, onImported, notify }) {
           <button
             type="button"
             className="btn-save"
-            disabled={busy || !report || report.valid === 0}
+            disabled={busy || !report || report.writes === 0}
             onClick={commit}
           >
-            {busy ? 'Working…' : `Add ${report?.valid ?? 0} merchants`}
+            {busy ? 'Working…' : `Save ${report?.writes ?? 0} ${report?.writes === 1 ? 'merchant' : 'merchants'}`}
           </button>
         </div>
       </div>

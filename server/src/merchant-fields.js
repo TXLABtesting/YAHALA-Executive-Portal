@@ -101,8 +101,14 @@ export const EXAMPLE_ROW = {
   expiryLabel: '',
 };
 
+/**
+ * The export carries this extra column so a re-uploaded sheet matches merchants
+ * by identity rather than by name — 32 merchants share a name with another.
+ */
+export const ID_HEADER = 'Portal ID';
+
 /** Trims a cell and turns everything empty-ish into ''. */
-const cell = (value) => {
+export const cell = (value) => {
   if (value === null || value === undefined) return '';
   // exceljs hands back objects for formulas and rich text.
   const raw =
@@ -119,22 +125,32 @@ const matchOption = (value, options) =>
 /**
  * Validates one spreadsheet row against the same rules the Add Merchant form
  * applies, returning the merchant to create plus any errors and warnings.
+ *
+ * `match` is the merchant this row was resolved to, by Portal ID or by name;
+ * the caller does that lookup because only it can see the whole file.
  */
-export function validateRow(raw, { existingNames, seenNames }) {
+export function validateRow(raw, { match = null, ambiguous = false, duplicate = false, updateExisting = false }) {
   const errors = [];
   const warnings = [];
   const merchant = {};
+  const provided = new Set();
+
+  const isUpdate = updateExisting && Boolean(match);
 
   for (const field of MERCHANT_FIELDS) {
     const value = cell(raw[field.key]);
 
     if (!value) {
-      if (field.required && field.default === undefined) {
+      // On an update a blank cell means "leave this as it is", so a required
+      // field is only demanded when the merchant is being created.
+      if (field.required && field.default === undefined && !isUpdate) {
         errors.push(`${field.header} is required.`);
       }
       merchant[field.key] = field.default ?? (field.type === 'number' ? 0 : '');
       continue;
     }
+
+    provided.add(field.key);
 
     if (field.options) {
       const matched = matchOption(value, field.options);
@@ -159,15 +175,19 @@ export function validateRow(raw, { existingNames, seenNames }) {
     merchant[field.key] = value;
   }
 
+  // A row that only carries a Portal ID and a logo still needs a name to show.
+  if (isUpdate && !merchant.name) merchant.name = match.name;
   const name = merchant.name || '';
-  const key = name.toLowerCase();
 
-  if (name) {
-    if (existingNames.has(key)) {
-      errors.push('A merchant with this name already exists in the portal.');
-    } else if (seenNames.has(key)) {
-      errors.push('This name appears more than once in the file.');
-    }
+  if (duplicate) {
+    errors.push('This merchant appears more than once in the file.');
+  } else if (!updateExisting && (match || ambiguous)) {
+    // `ambiguous` means two merchants already carry this name, so it exists twice over.
+    errors.push('A merchant with this name already exists in the portal.');
+  } else if (ambiguous) {
+    errors.push(
+      `Two merchants in the portal are called "${name}". Start from Download Current Merchants, which carries a ${ID_HEADER} for each row.`,
+    );
   }
 
   if (merchant.status !== 'Inactive' && (merchant.reason || merchant.expiryLabel)) {
@@ -181,5 +201,5 @@ export function validateRow(raw, { existingNames, seenNames }) {
     errors.push('Logo URL must start with http:// or https://.');
   }
 
-  return { merchant, errors, warnings };
+  return { merchant, errors, warnings, provided: [...provided], updateId: isUpdate ? match.id : null };
 }

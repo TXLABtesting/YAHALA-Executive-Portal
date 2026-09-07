@@ -1,13 +1,15 @@
 import ExcelJS from 'exceljs';
 import { query, withTransaction } from '../db/index.js';
-import { EXAMPLE_ROW, MERCHANT_FIELDS, validateRow } from '../merchant-fields.js';
+import { cell, EXAMPLE_ROW, ID_HEADER, MERCHANT_FIELDS, validateRow } from '../merchant-fields.js';
 import { merchantOut } from '../mappers.js';
 import { config } from '../config.js';
 import { storeBuffer } from '../files.js';
 
 const SHEET = 'Merchants';
 const VALIDATION_ROWS = 500;
-const MAX_ROWS = 2000;
+const SPARE_ROWS = 50;
+// Comfortably above the whole portal, so an exported sheet round-trips whole.
+const MAX_ROWS = 6000;
 
 const NAVY = 'FF0E1631';
 const GOLD = 'FFBC9A4F';
@@ -15,8 +17,35 @@ const PAPER = 'FFF5F6FA';
 
 /* ------------------------------------------------------------- template -- */
 
-/** Builds the workbook from MERCHANT_FIELDS, so it always matches the form. */
-export async function buildTemplate() {
+/**
+ * Puts a drop-down on every cell of the fields that have a fixed set of
+ * values, down to `lastRow`. Reading a cell creates its row, so this runs
+ * after the data rows are in — otherwise it would leave several hundred blank
+ * rows above them.
+ */
+function applyDropdowns(sheet, lastRow) {
+  MERCHANT_FIELDS.forEach((field, i) => {
+    if (!field.options) return;
+    const letter = sheet.getColumn(i + 1).letter;
+    for (let row = 2; row <= lastRow; row += 1) {
+      sheet.getCell(`${letter}${row}`).dataValidation = {
+        type: 'list',
+        allowBlank: !field.required,
+        formulae: [`"${field.options.join(',')}"`],
+        showErrorMessage: true,
+        errorTitle: field.header,
+        error: `Choose one of: ${field.options.join(', ')}`,
+      };
+    }
+  });
+}
+
+/**
+ * Header, styling and the Instructions sheet, built from MERCHANT_FIELDS so
+ * the workbook always matches the Add Merchant form. Drop-downs are left to
+ * the caller, which knows how many rows the sheet will end up with.
+ */
+async function buildWorkbook() {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'YAHALA Executive Portal';
   workbook.created = new Date();
@@ -36,22 +65,6 @@ export async function buildTemplate() {
     cell.alignment = { vertical: 'middle', horizontal: 'left' };
     cell.border = { bottom: { style: 'thin', color: { argb: GOLD } } };
     cell.note = `${field.required ? 'Required. ' : ''}${field.note || ''}`.trim();
-  });
-
-  // Dropdowns for every field that has a fixed set of values.
-  MERCHANT_FIELDS.forEach((field, i) => {
-    if (!field.options) return;
-    const letter = sheet.getColumn(i + 1).letter;
-    for (let row = 2; row <= VALIDATION_ROWS; row += 1) {
-      sheet.getCell(`${letter}${row}`).dataValidation = {
-        type: 'list',
-        allowBlank: !field.required,
-        formulae: [`"${field.options.join(',')}"`],
-        showErrorMessage: true,
-        errorTitle: field.header,
-        error: `Choose one of: ${field.options.join(', ')}`,
-      };
-    }
   });
 
   /* A second sheet carries the guidance and a filled-in example, so nothing in
@@ -86,9 +99,64 @@ export async function buildTemplate() {
 
   guide.addRow([]);
   guide.addRow(['Fill in the Merchants sheet, one merchant per row, then upload it in the Admin Portal.']);
-  guide.addRow(['A merchant logo cannot be set from the spreadsheet — add it afterwards by editing the merchant.']);
-  guide.addRow(['Names already used in the portal, or repeated in the file, are reported and skipped.']);
+  guide.addRow(['Logo URL takes a direct link to an image; the portal downloads it and stores it as the logo.']);
+  guide.addRow(['A name already in the portal is skipped, unless you upload with "merchants already in the portal" on — then its filled-in columns are updated and blank ones left alone.']);
 
+  return workbook;
+}
+
+/** The empty workbook to fill in: blank rows, each with its drop-downs. */
+export async function buildTemplate() {
+  const workbook = await buildWorkbook();
+  applyDropdowns(workbook.getWorksheet(SHEET), VALIDATION_ROWS);
+  return workbook;
+}
+
+/** The same workbook, pre-filled with the merchants already in the portal. */
+export async function buildExport() {
+  const workbook = await buildWorkbook();
+  const sheet = workbook.getWorksheet(SHEET);
+
+  const { rows } = await query(
+    `SELECT id, name, category, sub, offer_type, offer_desc, offers, offer_source,
+            status, city, reason, expiry_label
+     FROM merchants ORDER BY archived, name`,
+  );
+
+  /* An identity column, past the last form field: 32 merchants share a name
+     with another, so a re-uploaded sheet has to say which row it means. */
+  const idCol = MERCHANT_FIELDS.length + 1;
+  sheet.getColumn(idCol).width = 12;
+  const idHead = sheet.getRow(1).getCell(idCol);
+  idHead.value = ID_HEADER;
+  idHead.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+  idHead.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } };
+  idHead.alignment = { vertical: 'middle', horizontal: 'left' };
+  idHead.border = { bottom: { style: 'thin', color: { argb: GOLD } } };
+  idHead.note = 'Leave this column alone. It tells the portal which merchant a row belongs to. Rows you add yourself leave it empty.';
+
+  for (const r of rows) {
+    const added = sheet.addRow({
+      name: r.name,
+      category: r.category,
+      sub: r.sub,
+      offerSource: r.offer_source,
+      status: r.status,
+      offerType: r.offer_type,
+      offerDesc: r.offer_desc,
+      offers: r.offers,
+      city: r.city,
+      reason: r.reason,
+      expiryLabel: r.expiry_label,
+      logoUrl: '',
+    });
+    const idCell = added.getCell(idCol);
+    idCell.value = r.id;
+    idCell.font = { color: { argb: 'FF9AA3B5' }, size: 10 };
+  }
+
+  // Plus a few spare rows, so new merchants can be appended to the same sheet.
+  applyDropdowns(sheet, rows.length + 1 + SPARE_ROWS);
   return workbook;
 }
 
@@ -103,8 +171,8 @@ function readHeaderMap(sheet) {
   const headerRow = sheet.getRow(1);
   const seen = new Map();
 
-  headerRow.eachCell((cell, col) => {
-    const text = norm(cell.value && typeof cell.value === 'object' ? cell.value.text : cell.value);
+  headerRow.eachCell((c, col) => {
+    const text = norm(c.value && typeof c.value === 'object' ? c.value.text : c.value);
     if (text) seen.set(text, col);
   });
 
@@ -113,7 +181,29 @@ function readHeaderMap(sheet) {
     if (col) map.set(field.key, col);
     else if (field.required) missing.push(field.header);
   }
-  return { map, missing };
+  // Only the exported sheet carries it; the blank template does not.
+  return { map, missing, idColumn: seen.get(norm(ID_HEADER)) ?? null };
+}
+
+/** Spreadsheet field -> merchants column, for partial updates. */
+const COLUMN_OF = {
+  name: 'name',
+  category: 'category',
+  sub: 'sub',
+  offerType: 'offer_type',
+  offerDesc: 'offer_desc',
+  offers: 'offers',
+  offerSource: 'offer_source',
+  status: 'status',
+  city: 'city',
+  reason: 'reason',
+  expiryLabel: 'expiry_label',
+};
+
+/** True when a filled-in cell says the same thing the portal already holds. */
+function unchanged(value, current) {
+  if (typeof value === 'number') return Number(current) === value;
+  return String(current ?? '').trim() === String(value ?? '').trim();
 }
 
 /**
@@ -121,7 +211,7 @@ function readHeaderMap(sheet) {
  * rules. Returns one entry per row so the admin can see what will happen
  * before anything is written.
  */
-export async function analyseWorkbook(buffer) {
+export async function analyseWorkbook(buffer, { updateExisting = false } = {}) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
@@ -130,7 +220,7 @@ export async function analyseWorkbook(buffer) {
     throw Object.assign(new Error('That file has no sheets.'), { status: 400, expose: true });
   }
 
-  const { map, missing } = readHeaderMap(sheet);
+  const { map, missing, idColumn } = readHeaderMap(sheet);
   if (missing.length) {
     throw Object.assign(
       new Error(
@@ -140,9 +230,18 @@ export async function analyseWorkbook(buffer) {
     );
   }
 
-  const { rows: existing } = await query('SELECT lower(name) AS name FROM merchants');
-  const existingNames = new Set(existing.map((r) => r.name));
-  const seenNames = new Set();
+  const { rows: existing } = await query(
+    `SELECT id, name, lower(name) AS key, category, sub, offer_type, offer_desc,
+            offers, offer_source, status, city, reason, expiry_label
+     FROM merchants`,
+  );
+  const byId = new Map(existing.map((r) => [r.id, r]));
+  const byName = new Map();
+  for (const r of existing) {
+    // A name shared by two merchants identifies neither of them.
+    byName.set(r.key, byName.has(r.key) ? null : r);
+  }
+  const claimed = new Set();
 
   const results = [];
   let blank = 0;
@@ -162,15 +261,65 @@ export async function analyseWorkbook(buffer) {
       return;
     }
 
-    const { merchant, errors, warnings } = validateRow(raw, { existingNames, seenNames });
-    if (!errors.length && merchant.name) seenNames.add(merchant.name.toLowerCase());
+    /* The Portal ID an exported sheet carries names the merchant outright; a
+       sheet without one falls back to the name, which only identifies a
+       merchant when no other merchant shares it. */
+    const id = idColumn ? Number(cell(row.getCell(idColumn).value)) : NaN;
+    const named = byName.get(cell(raw.name).toLowerCase());
+    const ambiguous = !Number.isInteger(id) && named === null;
+    const match = (Number.isInteger(id) ? byId.get(id) : named) || null;
+    const key = match ? `#${match.id}` : cell(raw.name).toLowerCase();
 
-    results.push({ row: rowNumber, merchant, errors, warnings, valid: errors.length === 0 });
+    const { merchant, errors, warnings, provided, updateId } = validateRow(raw, {
+      match,
+      ambiguous,
+      duplicate: Boolean(key) && claimed.has(key),
+      updateExisting,
+    });
+    if (!errors.length && key) claimed.add(key);
+
+    /* Re-uploading an exported sheet repeats every merchant unchanged. Keep
+       only the cells that differ from what the portal holds, so such a file
+       writes the handful of rows the admin actually edited and no more. */
+    let changed = provided;
+    if (updateId && !errors.length) {
+      const current = match;
+      // A Portal ID identifies the merchant, so even its name can be corrected.
+      changed = provided.filter(
+        (key) => key !== 'logoUrl' && !unchanged(merchant[key], current[COLUMN_OF[key]]),
+      );
+      if (changed.length) {
+        warnings.push(`Already in the portal — ${changed.length} column${changed.length === 1 ? '' : 's'} will be updated.`);
+      } else if (merchant.logoUrl) {
+        warnings.push('Already in the portal — its logo will be updated.');
+      } else {
+        warnings.push('Already in the portal and unchanged — nothing to write.');
+      }
+    }
+
+    const writes = !updateId || changed.length > 0 || Boolean(merchant.logoUrl);
+
+    results.push({
+      row: rowNumber,
+      merchant,
+      provided: changed,
+      updateId,
+      writes,
+      errors,
+      warnings,
+      valid: errors.length === 0,
+    });
   });
+
+  const writable = results.filter((r) => r.valid && r.writes);
 
   return {
     rows: results,
     blankRows: blank,
+    updates: writable.filter((r) => r.updateId).length,
+    creates: writable.filter((r) => !r.updateId).length,
+    unchanged: results.filter((r) => r.valid && !r.writes).length,
+    writes: writable.length,
     valid: results.filter((r) => r.valid).length,
     invalid: results.filter((r) => !r.valid).length,
     warnings: results.filter((r) => r.valid && r.warnings.length).length,
@@ -211,6 +360,7 @@ async function fetchLogo(url) {
 async function attachLogos(rows) {
   const pending = rows.filter((r) => r.merchant.logoUrl);
   let fetched = 0;
+  let failed = 0;
 
   for (let i = 0; i < pending.length; i += LOGO_CONCURRENCY) {
     const batch = pending.slice(i, i + LOGO_CONCURRENCY);
@@ -221,27 +371,52 @@ async function attachLogos(rows) {
           r.merchant.logo = result.url;
           fetched += 1;
         } else {
+          failed += 1;
           r.warnings.push(`Logo not added — the link ${result.error}.`);
         }
       }),
     );
   }
-  return fetched;
+  return { fetched, failed };
 }
 
-/** Writes the valid rows using the same insert the Add Merchant form uses. */
+/**
+ * Writes the valid rows: new merchants through the same insert the Add
+ * Merchant form uses, matched ones as a patch of the columns the sheet filled.
+ */
 export async function importRows(rows) {
-  const validRows = rows.filter((r) => r.valid);
-  if (!validRows.length) return { created: [], logosFetched: 0 };
+  const validRows = rows.filter((r) => r.valid && r.writes);
+  if (!validRows.length) return { created: [], logosFetched: 0, logosFailed: 0 };
 
   // Logos are fetched before the transaction opens, so a slow link never holds
   // a database transaction open.
-  const logosFetched = await attachLogos(validRows);
-  const valid = validRows.map((r) => r.merchant);
+  const { fetched: logosFetched, failed: logosFailed } = await attachLogos(validRows);
 
-  const created = await withTransaction(async (client) => {
+  const written = await withTransaction(async (client) => {
     const created = [];
-    for (const m of valid) {
+
+    for (const row of validRows.filter((r) => r.updateId)) {
+      // Only the columns the sheet actually filled are written, so a sheet
+      // carrying just names and logos leaves everything else untouched.
+      const patch = new Map();
+      for (const key of row.provided) {
+        if (key === 'logoUrl') continue;
+        patch.set(COLUMN_OF[key], row.merchant[key]);
+      }
+      if (row.merchant.logo) patch.set('logo', row.merchant.logo);
+      if (patch.has('status')) patch.set('archived', row.merchant.status === 'Inactive');
+      if (!patch.size) continue;
+
+      const keys = [...patch.keys()];
+      const assignments = keys.map((col, i) => `${col} = $${i + 2}`).join(', ');
+      const { rows: updated } = await client.query(
+        `UPDATE merchants SET ${assignments}, updated_at = now() WHERE id = $1 RETURNING *`,
+        [row.updateId, ...keys.map((k) => patch.get(k))],
+      );
+      if (updated[0]) created.push(merchantOut(updated[0]));
+    }
+
+    for (const m of validRows.filter((r) => !r.updateId).map((r) => r.merchant)) {
       const { rows: inserted } = await client.query(
         `INSERT INTO merchants
            (name, category, sub, offer_type, offer_desc, offers, offer_source,
@@ -261,5 +436,5 @@ export async function importRows(rows) {
     return created;
   });
 
-  return { created, logosFetched };
+  return { created: written, logosFetched, logosFailed };
 }

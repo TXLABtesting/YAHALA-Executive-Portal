@@ -143,6 +143,7 @@ session.
 | `PUT`              | the same resources      | admin |
 | `POST`             | `/api/uploads`          | admin |
 | `GET`              | `/api/merchants/template` | admin |
+| `GET`              | `/api/merchants/export` | admin |
 | `POST`             | `/api/merchants/import` | admin |
 
 `GET /api/bootstrap` returns everything the portal renders in one response, so
@@ -177,7 +178,7 @@ validation, and a second sheet documents each column with an example row.
 Without `commit` it only reports: every row is checked against the same rules
 the form applies — required fields, known categories, sources and statuses,
 whole-number offer counts — plus duplicates against the portal and within the
-file itself. With `commit: true` it inserts the valid rows in one transaction,
+file itself. With `commit: true` it writes the valid rows in one transaction,
 using the same insert as Add Merchant, and resyncs `kpi.merchants`. Invalid
 rows are never written.
 
@@ -185,7 +186,26 @@ A **Logo URL** column carries each merchant's logo: on import the server
 fetches the image, stores it in the `files` table like a manual upload, and
 points the merchant at it. A link that 404s, times out or is not an image
 leaves that merchant with its monogram and reports why — it never blocks the
-merchant from being created.
+merchant from being saved.
+
+### Filling in merchants you already have
+
+`GET /api/merchants/export` returns the same workbook pre-filled with every
+merchant in the portal, and the modal offers it as **Download Current
+Merchants**. Fill in a column — Logo URL, say — upload the sheet with
+*merchants already in the portal* switched on, and each row patches the
+merchant it came from: only the cells that differ are written, and blank cells
+are left alone.
+
+Matching is by the **Portal ID** column the export carries, not by name: 32
+merchants share a name with another, so a name identifies no one row. A sheet
+without that column (the blank template) still matches by name, and reports a
+name that belongs to two merchants rather than guessing between them. A row
+with no Portal ID is a new merchant, so an exported sheet can be extended at
+the bottom.
+
+Re-uploading an untouched export therefore writes nothing at all: it reports
+every row as already up to date.
 
 ### Uploads
 
