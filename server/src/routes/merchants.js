@@ -131,13 +131,18 @@ merchantsRouter.delete('/:id', requireAdmin, async (req, res, next) => {
 merchantsRouter.get('/template', requireAdmin, async (_req, res, next) => {
   try {
     const workbook = await buildTemplate();
+    // Buffered rather than streamed into the response: a serverless function
+    // can end before a piped stream has flushed, which produces a truncated
+    // download that Excel refuses to open.
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
     res.setHeader('Content-Disposition', 'attachment; filename="yahala-merchants-template.xlsx"');
-    await workbook.xlsx.write(res);
-    res.end();
+    res.setHeader('Content-Length', String(buffer.length));
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
   } catch (err) {
     next(err);
   }
