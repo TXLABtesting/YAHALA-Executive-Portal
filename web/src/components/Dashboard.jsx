@@ -8,7 +8,7 @@ import {
   CategoryTiles,
   LaunchGrid,
   LaunchList,
-  NewslettersGrid,
+  NewslettersSection,
   RedeemersBlockA,
   RedeemersBlockB,
   UpdatesPanel,
@@ -109,13 +109,7 @@ export default function Dashboard({
             </div>
           </div>
 
-          <div>
-            <SectionHead
-              title="Marketing Newsletters"
-              note={`${newsletters.length} issues in the library`}
-            />
-            <NewslettersGrid newsletters={newsletters} />
-          </div>
+          <NewslettersSection newsletters={newsletters} />
         </div>
       ) : (
         <div className="stack">
@@ -152,13 +146,7 @@ export default function Dashboard({
             </div>
           </div>
 
-          <div>
-            <SectionHead
-              title="Marketing Newsletters"
-              note={`${newsletters.length} issues in the library`}
-            />
-            <NewslettersGrid newsletters={newsletters} />
-          </div>
+          <NewslettersSection newsletters={newsletters} />
         </div>
       )}
     </main>

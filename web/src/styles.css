@@ -632,6 +632,22 @@ button {
   color: var(--ink3);
 }
 
+/* A section's controls and its note, kept together at the right of the head. */
+.section-aside {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.chev-turn {
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+}
+
+.chev-turn.is-open {
+  transform: rotate(-90deg);
+}
+
 .grid-kpi {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));

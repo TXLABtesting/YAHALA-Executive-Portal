@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Icon } from '../../lib/icons.jsx';
 import {
   CATEGORIES,
@@ -257,6 +258,45 @@ export function AccommodationCard({ total }) {
 }
 
 /* ---------------------------------------------------------- newsletters -- */
+
+/**
+ * The library only ever grows, so the dashboard shows the four newest issues
+ * and keeps the rest one click away rather than running the page long.
+ */
+const NEWSLETTER_PREVIEW = 4;
+
+export function NewslettersSection({ newsletters }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? newsletters : newsletters.slice(0, NEWSLETTER_PREVIEW);
+  const hidden = newsletters.length - NEWSLETTER_PREVIEW;
+
+  return (
+    <div>
+      <SectionHead title="Marketing Newsletters">
+        <div className="section-aside">
+          {hidden > 0 && (
+            <button
+              type="button"
+              className="btn-ghost sm"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? 'Show Less' : `View More (${hidden})`}
+              <Icon
+                name="chevright"
+                size={14}
+                stroke={2}
+                className={`chev-turn${expanded ? ' is-open' : ''}`}
+              />
+            </button>
+          )}
+          <span className="section-note">{newsletters.length} issues in the library</span>
+        </div>
+      </SectionHead>
+      <NewslettersGrid newsletters={shown} />
+    </div>
+  );
+}
 
 export function NewslettersGrid({ newsletters }) {
   return (
