@@ -274,6 +274,7 @@ export function NewslettersSection({ newsletters }) {
     <div>
       <SectionHead title="Marketing Newsletters">
         <div className="section-aside">
+          <span className="section-note">{newsletters.length} issues in the library</span>
           {hidden > 0 && (
             <button
               type="button"
@@ -290,7 +291,6 @@ export function NewslettersSection({ newsletters }) {
               />
             </button>
           )}
-          <span className="section-note">{newsletters.length} issues in the library</span>
         </div>
       </SectionHead>
       <NewslettersGrid newsletters={shown} />
